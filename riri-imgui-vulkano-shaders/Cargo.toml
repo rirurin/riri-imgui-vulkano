@@ -1,0 +1,13 @@
+[package]
+name = "riri-imgui-vulkano-shaders"
+version.workspace = true
+authors.workspace = true
+categories.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license-file.workspace = true
+edition.workspace = true
+
+[dependencies]
+bitflags = "2.11.0"
+shaderc = "0.10.1"

@@ -1,0 +1,29 @@
+[package]
+name = "riri-imgui-vulkano-app"
+version.workspace = true
+authors.workspace = true
+categories.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license-file.workspace = true
+edition.workspace = true
+
+[dependencies]
+copypasta = "0.10.2"
+humantime = "2.3.0"
+glam = "0.32"
+imgui = { git = "https://github.com/rirurin/imgui-rs", features = ["docking", "tables-api"] }
+imgui-winit-support = { git = "https://github.com/rirurin/imgui-winit-support" }
+riri-imgui-vulkano = { path = "../riri-imgui-vulkano" }
+riri-mod-tools-proc = { git = "https://github.com/rirurin/riri-mod-tools" }
+riri-mod-tools-rt = { git = "https://github.com/rirurin/riri-mod-tools", features = ["detailed-logs"] }
+vulkano = "0.35"
+winit = { git = "https://github.com/rirurin/winit" }
+
+[build-dependencies]
+riri-imgui-vulkano-shaders = { path = "../riri-imgui-vulkano-shaders" }
+riri-mod-tools = { git = "https://github.com/rirurin/riri-mod-tools" }
+shaderc = "0.10.1"
+
+[target.'cfg(windows)'.build-dependencies]
+winresource = "0.1.30"

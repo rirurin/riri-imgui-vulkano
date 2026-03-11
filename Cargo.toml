@@ -1,0 +1,47 @@
+[workspace]
+
+members = [
+    "riri-imgui-vulkano", 
+    "riri-imgui-vulkano-app", 
+    "riri-imgui-vulkano-shaders"
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+authors = [ "Rirurin" ]
+categories = [ "graphics", "gui" ]
+homepage = "https://riri.wtf"
+repository = "https://github.com/rirurin/riri-imgui-vulkano"
+license-file = "LICENSE"
+edition = "2024"
+
+# Optimized Release Build, all the optimizations!!
+[profile.release]
+codegen-units = 1
+lto = true
+strip = true  # Automatically strip symbols from the binary.
+
+# Release Build with Debug Info
+[profile.release-debug]
+inherits = "release"
+debug = true # Allow us to debug using LLDB
+
+# Slow Debug, for fast iteration
+[profile.slow-debug]
+inherits = "release"
+debug = true
+lto = false
+incremental = true
+codegen-units = 256
+
+# For Rirurin: Uncomment the patches when in active development!
+
+[patch."https://github.com/rirurin/winit"]
+winit = { path = "../winit/winit" }
+
+[patch."https://github.com/rirurin/imgui-winit-support"]
+imgui-winit-support = { path = "../imgui-winit-support" }
+
+[patch."https://github.com/rirurin/imgui-rs"]
+imgui = { path = "../imgui-rs/imgui" }

@@ -1,0 +1,1 @@
+use riri_mod_tools_proc :: date_time ; pub static COMMIT_COUNT : usize = 0usize ; pub static COMMIT_HASH : & 'static str = "" ; pub static RELOADED_VERSION : & 'static str = "0.1.0" ; date_time ! (COMPILE_DATE) ;
