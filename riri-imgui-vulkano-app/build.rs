@@ -31,6 +31,7 @@ fn get_output_directory() -> PathBuf {
 fn main() {
     let base = std::env::current_dir().unwrap();
     let out_dir = get_output_directory();
+    // Compile shaders and copy to output directory
     let shader_names = [
         "shaders/basic3d.ps",
         "shaders/basic3d.vs",
@@ -52,6 +53,7 @@ fn main() {
     for shader in &shaders_in {
         println!("cargo::rerun-if-changed={}", shader.to_str().unwrap());
     }
+
     for (path_in, path_out) in shaders_in.iter().zip(shaders_out.iter()) {
         // from shader-compiler example in riri-imgui-vulkano-shadesr
         let filename = path_in.file_name().unwrap().to_str().unwrap().to_string();
@@ -77,6 +79,18 @@ fn main() {
         std::fs::create_dir_all(path_out.parent().unwrap()).unwrap();
         std::fs::write(path_out.as_path(), bytes).unwrap();
     }
+    // Copy fonts to output directory
+    let font_names = [
+        "data/LibreBodoni-Bold.ttf",
+        "data/NotoSansCJKjp-Medium.otf"
+    ];
+    let fonts_in = font_names.map(|v| base.join(v));
+    let fonts_out = font_names.map(|v| out_dir.join(v));
+    std::fs::create_dir_all(out_dir.join("data")).unwrap();
+    for (font_in, font_out) in fonts_in.iter().zip(fonts_out.iter()) {
+        std::fs::copy(font_in, font_out).unwrap();
+    }
+    // Setup Windows app info
     let cargo_info = mod_package::CargoInfo::new_with_resolver(base.as_path(), get_project_root).unwrap();
     #[cfg(target_os = "windows")]
     {

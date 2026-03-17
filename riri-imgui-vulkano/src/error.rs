@@ -17,7 +17,7 @@ pub enum LibError {
     NoCommandBufferAtIndex(usize),
     CouldNotFindShader(String),
     MissingDescriptorSet(TextureId),
-    NoFileExtensionOnShader
+    NoFileExtensionOnShader,
 }
 
 impl Error for LibError {}

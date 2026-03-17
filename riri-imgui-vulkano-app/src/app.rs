@@ -1,21 +1,26 @@
-use std::error::Error;
+use crate::camera::Camera;
+use crate::color::ColorConverter;
+use crate::renderer::context::VulkanContext;
+use crate::result::Result;
+use glam::{U8Vec4, Vec2, Vec3};
+use imgui::{BackendFlags, ConfigFlags, Context as ImContext, FontGlyphRanges, FontId, ImColor32, Key};
+use imgui_winit_support::{HiDpiMode, WinitPlatform};
+use riri_imgui_vulkano::context::RendererContext;
+use riri_imgui_vulkano::vertex::{AppDrawData3D, AppVertex3D};
+use riri_inspector_components::clipboard::ClipboardSupport;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
-use imgui::{BackendFlags, ConfigFlags, Context as ImContext, FontConfig, FontSource};
-use imgui_winit_support::{HiDpiMode, WinitPlatform};
+use gilrs_imgui_support::state::GamepadState;
 use vulkano::format::ClearValue;
 use winit::application::ApplicationHandler;
 use winit::dpi::{PhysicalPosition, PhysicalSize, Position, Size};
-use winit::event::WindowEvent;
+use winit::event::{DeviceEvent, DeviceId, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::icon::Icon;
 #[cfg(target_os = "windows")]
 use winit::platform::windows::WinIcon;
 use winit::window::{Window, WindowAttributes, WindowId};
-use riri_imgui_vulkano::context::RendererContext;
-use crate::clipboard::ClipboardSupport;
-use crate::color::ColorConverter;
-use crate::renderer::VulkanContext;
 
 #[derive(Debug)]
 pub(crate) struct App {
@@ -23,6 +28,12 @@ pub(crate) struct App {
     platform: Option<WinitPlatform>,
     imgui: Option<ImContext>,
     renderer: Option<VulkanContext>,
+    fonts: HashMap<String, FontId>,
+
+    camera: Camera,
+    data3d: AppDrawData3D,
+    gamepad: GamepadState,
+
     last_frame: Instant,
     count: usize,
 }
@@ -31,18 +42,22 @@ impl App {
     pub(crate) fn execute() {
         let event_loop = EventLoop::new().unwrap();
         event_loop.set_control_flow(ControlFlow::Poll);
-        let _ = event_loop.run_app(Box::new(App::new()));
+        let _ = event_loop.run_app(Box::new(App::new().unwrap()));
     }
 
-    fn new() -> Self {
-        Self {
+    fn new() -> Result<Self> {
+        Ok(Self {
             window: None,
             platform: None,
             imgui: None,
             renderer: None,
+            fonts: HashMap::new(),
             last_frame: Instant::now(),
+            camera: Camera::new(),
+            data3d: Self::get_sample_data(),
+            gamepad: GamepadState::new()?,
             count: 0,
-        }
+        })
     }
 
     pub fn get_name(&self) -> &str {
@@ -68,13 +83,56 @@ impl App {
     pub fn get_imgui_mut(&mut self) -> &mut ImContext {
         self.imgui.as_mut().unwrap()
     }
+
+    pub(crate) fn get_sample_data() -> AppDrawData3D {
+        let vertices = vec![
+            // Front
+            AppVertex3D::pos_color(Vec3::new( -0.5,  -0.5, 0.5 ), U8Vec4::new(0xff, 0x00, 0x00, 0xff)),
+            AppVertex3D::pos_color(Vec3::new(  0.5,  -0.5, 0.5 ), U8Vec4::new(0x00, 0xff, 0x00, 0xff)),
+            AppVertex3D::pos_color(Vec3::new( -0.5,   0.5, 0.5 ), U8Vec4::new(0x00, 0x00, 0xff, 0xff)),
+            AppVertex3D::pos_color(Vec3::new(  0.5,   0.5, 0.5 ), U8Vec4::new(0xff, 0xff, 0x00, 0xff)),
+
+            // Back
+            AppVertex3D::pos_color(Vec3::new( -0.5,  -0.5, -0.5 ), U8Vec4::new(0x00, 0xff, 0xff, 0xff)),
+            AppVertex3D::pos_color(Vec3::new(  0.5,  -0.5, -0.5 ), U8Vec4::new(0xff, 0x00, 0xff, 0xff)),
+            AppVertex3D::pos_color(Vec3::new( -0.5,   0.5, -0.5 ), U8Vec4::new(0x00, 0x00, 0x00, 0xff)),
+            AppVertex3D::pos_color(Vec3::new(  0.5,   0.5, -0.5 ), U8Vec4::new(0xff, 0xff, 0xff, 0xff)),
+        ];
+
+        let indices = vec![
+            //Top
+            7u32, 6, 2,
+            2, 3, 7,
+
+            //Bottom
+            0, 4, 5,
+            5, 1, 0,
+
+            //Left
+            0, 2, 6,
+            6, 4, 0,
+
+            //Right
+            7, 3, 1,
+            1, 5, 7,
+
+            //Front
+            3, 2, 0,
+            0, 1, 3,
+
+            //Back
+            4, 6, 7,
+            7, 5, 4
+        ];
+        AppDrawData3D::new(vertices, indices)
+    }
 }
 
 #[cfg(target_os = "windows")]
 struct IconLookupWin32;
 #[cfg(target_os = "windows")]
 impl IconLookupWin32 {
-    fn get() -> Result<Icon, Box<dyn Error>> {
+    fn get() -> Result<Icon> {
         Ok(WinIcon::from_resource(0x65, None)?.into())
     }
 }
@@ -105,10 +163,8 @@ impl ApplicationHandler for App {
         );
         self.get_imgui_mut().io_mut().mouse_pos = [0., 0.];
         let hidpi_factor = self.platform.as_ref().unwrap().hidpi_factor();
-        let font_size = (13.0 * hidpi_factor) as f32;
-        self.get_imgui_mut().fonts().add_font(&[FontSource::DefaultFontData {
-            config: Some(FontConfig { size_pixels: font_size, ..FontConfig::default() }),
-        }]);
+        self.add_font("NotoSansCJKjp-Medium.otf", FontGlyphRanges::japanese(), 15.).unwrap();
+        self.add_font("LibreBodoni-Bold.ttf", FontGlyphRanges::japanese(), 60.).unwrap();
         self.get_imgui_mut().io_mut().font_global_scale = (1.0 / hidpi_factor) as f32;
         self.renderer = Some(VulkanContext::new(
             RendererContext::new(event_loop, self.get_window(), Some(self.get_name().to_string())).unwrap(),
@@ -139,13 +195,15 @@ impl ApplicationHandler for App {
             WindowEvent::RedrawRequested => {
                 let now = Instant::now();
                 imgui.io_mut().update_delta_time(now - self.last_frame);
+                let delta_time = imgui.io().delta_time;
                 self.last_frame = now;
-                // Start draw UI
-                // let delta = imgui.io_mut().delta_time;
-                let ui = imgui.new_frame();
-                let mut show = true;
-                // println!("delta: {}", delta);
                 self.count = self.count.overflowing_add(1).0;
+                self.gamepad.update(imgui);
+                // Start draw UI
+                let ui = imgui.new_frame();
+                self.camera.update(ui, delta_time);
+                let mut show = true;
+                AppDebugInfo::new(&self.fonts, ui, &self.camera, window.clone()).draw();
                 ui.show_demo_window(&mut show);
                 let draw_data = imgui.render();
                 let clear_color = ColorConverter::hsv_to_rgb(
@@ -153,7 +211,7 @@ impl ApplicationHandler for App {
                 if let ClearValue::Float(v) = &mut renderer.clear_color {
                     *v = [clear_color.x, clear_color.y, clear_color.z, 1.];
                 }
-                renderer.render_imgui(draw_data).unwrap();
+                renderer.render(draw_data, &self.data3d, &self.camera).unwrap();
                 if renderer.present().unwrap() {
                     renderer.refresh(window.clone()).unwrap();
                 }
@@ -168,5 +226,86 @@ impl ApplicationHandler for App {
                 platform.handle_window_event(io, window.as_ref().as_ref(), &event)
             }
         }
+    }
+}
+
+impl App {
+    pub fn add_font(&mut self, name: &str, range: FontGlyphRanges, size: f32)
+    -> Result<()> {
+        let font_path = std::env::current_exe().unwrap()
+            .parent().unwrap().join("data");
+        let key =  name.rsplit_once(".")
+            .map_or_else(|| name, |(name, _)| name).to_owned();
+        self.fonts.insert(
+            key,
+            riri_inspector_components::font::load_font(
+                self.imgui.as_mut().unwrap(),
+                font_path.join(name),
+                range,
+                size
+            )?
+        );
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub struct AppDebugInfo<'a> {
+    fonts: &'a HashMap<String, FontId>,
+    ui: &'a mut imgui::Ui,
+    camera: &'a Camera,
+    window: Arc<Box<dyn Window>>
+}
+
+impl<'a> AppDebugInfo<'a> {
+    pub(crate) fn new(
+        fonts: &'a HashMap<String, FontId>,
+        ui: &'a mut imgui::Ui,
+        camera: &'a Camera,
+        window: Arc<Box<dyn Window>>
+    ) -> Self {
+        Self { fonts, ui, camera, window }
+    }
+
+    pub(crate) fn draw(&self) {
+        let tf_id = *self.fonts.get("LibreBodoni-Bold").unwrap();
+        let title_font = self.ui.fonts().get_font(tf_id).unwrap();
+        let m_id = *self.fonts.get("NotoSansCJKjp-Medium").unwrap();
+        let main_font = self.ui.fonts().get_font(m_id).unwrap();
+
+        let debug_title = "Vulkano Test App";
+        let debug_info = format!(
+            "Version {}, Git Commit {}, Build Date {}",
+            crate::version::RELOADED_VERSION,
+            crate::version::COMMIT_HASH,
+            crate::version::COMPILE_DATE
+        );
+
+        let position_info = format!(
+            "Lookat: {} -> {}, Pan {}, Pitch {}, Roll {}",
+            self.camera.eye,
+            self.camera.lookat,
+            self.camera.pan,
+            self.camera.pitch,
+            self.camera.roll
+        );
+
+        let window_dims = Vec2::from_array(self.window.surface_size().into());
+        let title_length = debug_title.chars().map(|c| title_font.get_glyph(c).advance_x).sum::<f32>();
+        let title_pos = [window_dims.x - (title_length + 20.), window_dims.y - (title_font.font_size + main_font.font_size * 2.)];
+        let info_length = debug_info.chars().map(|c| main_font.get_glyph(c).advance_x).sum::<f32>();
+        let info_pos = [ window_dims.x - (info_length + 20.), window_dims.y - (main_font.font_size + main_font.font_size / 2.)];
+
+        let position_length = position_info.chars().map(|c| main_font.get_glyph(c).advance_x).sum::<f32>();
+        let position_pos = [ window_dims[0] - (position_length + (main_font.font_size * 2.)), 0.];
+
+        let debug_subtitle = ImColor32::from_rgba(255, 255, 255, 127);
+        let title_token = self.ui.push_font(tf_id);
+        self.ui.get_background_draw_list().add_text(title_pos, debug_subtitle, debug_title);
+        title_token.pop();
+        let body_token = self.ui.push_font(m_id);
+        self.ui.get_background_draw_list().add_text(info_pos, debug_subtitle, debug_info);
+        self.ui.get_foreground_draw_list().add_text(position_pos, ImColor32::WHITE, position_info);
+        body_token.pop();
     }
 }

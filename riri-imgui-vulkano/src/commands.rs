@@ -4,6 +4,8 @@ use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 use glam::{Mat4, Vec2, Vec4};
 use imgui::{DrawCmd, DrawCmdParams, TextureId};
+use imgui::internal::RawWrapper;
+use riri_mod_tools_rt::logln;
 use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer};
 use vulkano::command_buffer::allocator::{StandardCommandBufferAllocator, StandardCommandBufferAllocatorCreateInfo};
 use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, CopyBufferToImageInfo, CopyImageToBufferInfo, PrimaryAutoCommandBuffer, RenderPassBeginInfo, SubpassBeginInfo, SubpassContents, SubpassEndInfo};
@@ -13,9 +15,9 @@ use vulkano::memory::allocator::{AllocationCreateInfo, MemoryTypeFilter};
 use vulkano::pipeline::graphics::viewport::{Scissor, Viewport};
 use vulkano::pipeline::{GraphicsPipeline, Pipeline, PipelineBindPoint};
 use vulkano::render_pass::Framebuffer;
-use crate::descriptors::LibDescriptorSets;
+use crate::descriptors::{DescriptorSetRegistry, LibDescriptorSets};
 use crate::error::Result;
-use crate::geometry::ImguiGeometry;
+use crate::geometry::{BasicDrawGeometry, ImguiGeometry};
 use crate::resources::{HasCommandBufferAllocator, HasLogicalDevice, HasQueue, HasStandardMemoryAllocator};
 
 #[derive(Debug)]
@@ -217,66 +219,107 @@ impl GpuCommandSet for CopyImageToBuffer {
 }
 
 #[derive(Debug)]
-pub struct DrawImgui<'a> {
-    clear_color: ClearValue,
+pub struct StartRenderPass {
     framebuffer: Arc<Framebuffer>,
-    pipeline: Arc<GraphicsPipeline>,
-    geometry: &'a ImguiGeometry<'a>,
-    viewport: Viewport,
-    descriptors: &'a LibDescriptorSets
+    clear_values: Vec<Option<ClearValue>>,
 }
 
-impl<'a> DrawImgui<'a> {
+impl StartRenderPass {
     pub fn new(
-        clear_color: ClearValue,
         framebuffer: Arc<Framebuffer>,
-        pipeline: Arc<GraphicsPipeline>,
-        geometry: &'a ImguiGeometry<'a>,
-        viewport: Viewport,
-        descriptors: &'a LibDescriptorSets
-    ) -> Result<Self> {
-        Ok(Self { clear_color, framebuffer, pipeline, geometry, viewport, descriptors })
+        clear_values: Vec<Option<ClearValue>>,
+    ) -> Self {
+        Self { framebuffer, clear_values }
     }
 }
 
-impl<'a> GpuCommandSet for DrawImgui<'a> {
+impl GpuCommandSet for StartRenderPass {
     fn build(&self, builder: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>) -> Result<()> {
-        // ImGui_ImplVulkan_SetupRenderState
         builder
             .begin_render_pass(
                 RenderPassBeginInfo {
-                    clear_values: vec![Some(self.clear_color)],
+                    clear_values: self.clear_values.clone(),
                     ..RenderPassBeginInfo::framebuffer(self.framebuffer.clone())
                 },
                 SubpassBeginInfo {
                     contents: SubpassContents::Inline,
                     ..Default::default()
                 }
-            )?
-            .bind_pipeline_graphics(self.pipeline.clone())?;
+            )?;
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub struct NextSubpass;
+
+impl NextSubpass {
+    pub fn new() -> Self { Self }
+}
+
+impl GpuCommandSet for NextSubpass {
+    fn build(&self, builder: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>) -> Result<()> {
+        builder.next_subpass(
+            SubpassEndInfo::default(),
+            SubpassBeginInfo {
+                contents: SubpassContents::Inline,
+                ..Default::default()
+            }
+        )?;
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub struct EndRenderPass;
+
+impl EndRenderPass {
+    pub fn new() -> Self { Self }
+}
+
+impl GpuCommandSet for EndRenderPass {
+    fn build(&self, builder: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>) -> Result<()> {
+        builder.end_render_pass(SubpassEndInfo::default())?;
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub struct DrawImgui<'a> {
+    pipeline: Arc<GraphicsPipeline>,
+    geometry: &'a ImguiGeometry<'a>,
+    viewport: Viewport,
+    descriptors: &'a LibDescriptorSets,
+    ortho: TextureId,
+}
+
+impl<'a> DrawImgui<'a> {
+    pub fn new(
+        pipeline: Arc<GraphicsPipeline>,
+        geometry: &'a ImguiGeometry<'a>,
+        viewport: Viewport,
+        descriptors: &'a LibDescriptorSets,
+        ortho: TextureId,
+    ) -> Result<Self> {
+        Ok(Self { pipeline, geometry, viewport, descriptors, ortho })
+    }
+}
+
+impl<'a> GpuCommandSet for DrawImgui<'a> {
+    fn build(&self, builder: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>) -> Result<()> {
+        // ImGui_ImplVulkan_SetupRenderState
+        builder.bind_pipeline_graphics(self.pipeline.clone())?;
         if let Some(draw_data) = &self.geometry.draw_data {
             let viewport_extent = Vec2::from(self.viewport.extent);
-            // Setup viewport:
-            builder.set_viewport(0, [self.viewport.clone()].into_iter().collect())?;
-            let left = draw_data.display_pos.x;
-            let right = draw_data.display_pos.x + draw_data.display_size.x;
-            let top = draw_data.display_pos.y;
-            let bottom = draw_data.display_pos.y + draw_data.display_size.y;
-            let projection = Mat4::from_cols(
-                Vec4::new(2. / (right - left), 0., 0., 0.),
-                Vec4::new(0., 2. / (bottom - top), 0., 0.),
-                Vec4::new(0., 0., -1., 0.),
-                Vec4::new((right + left) / (left - right), (top + bottom) / (top - bottom), 0., 1.)
-            );
-
+            let ortho = self.descriptors.get(self.ortho)?.clone().upgrade().unwrap();
             builder
-                .push_constants(
-                    // mat4 ortho
+                .set_viewport(0, [self.viewport.clone()].into_iter().collect())?
+                .bind_descriptor_sets(
+                    PipelineBindPoint::Graphics,
                     self.pipeline.layout().clone(),
-                    size_of::<f32>() as u32 * 0,
-                    projection.to_cols_array()
-                )?;
-            // Bind Vertex And Index Buffer:
+                    1, ortho
+                )?
+            ;
             if let Some(vertex_buffer) = &self.geometry.vertex_buffer {
                 builder.bind_vertex_buffers(0, vertex_buffer.clone())?;
             }
@@ -340,13 +383,13 @@ impl<'a> GpuCommandSet for DrawImgui<'a> {
                             )? };
                         },
                         DrawCmd::ResetRenderState => {
-                            println!("DrawCmd::ResetRenderState not implemented");
+                            logln!(Warning, "DrawCmd::ResetRenderState not implemented");
                         },
                         DrawCmd::RawCallback {
                             callback,
                             raw_cmd
                         } => {
-                            println!("DrawCmd::RawCallback not implemented");
+                            unsafe { callback(draw_list.raw(), raw_cmd ) }
                         }
                     }
                 }
@@ -354,7 +397,56 @@ impl<'a> GpuCommandSet for DrawImgui<'a> {
                 global_vertex_offset += draw_list.vtx_buffer().len();
             }
         }
-        builder.end_render_pass(SubpassEndInfo::default())?;
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub struct DrawBasic3d<'a> {
+    pipeline: Arc<GraphicsPipeline>,
+    geometry: &'a BasicDrawGeometry,
+    viewport: Viewport,
+    descriptors: &'a LibDescriptorSets,
+    mvp: TextureId
+}
+
+impl<'a> DrawBasic3d<'a> {
+    pub fn new(
+        pipeline: Arc<GraphicsPipeline>,
+        geometry: &'a BasicDrawGeometry,
+        viewport: Viewport,
+        descriptors: &'a LibDescriptorSets,
+        mvp: TextureId,
+    ) -> Result<Self> {
+        Ok(Self { pipeline, geometry, viewport, descriptors, mvp })
+    }
+}
+
+impl<'a> GpuCommandSet for DrawBasic3d<'a> {
+    fn build(&self, builder: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>) -> Result<()> {
+        let mvp = self.descriptors.get(self.mvp)?.clone().upgrade().unwrap();
+        builder
+            .bind_pipeline_graphics(self.pipeline.clone())?
+            .set_viewport(0, [self.viewport.clone()].into_iter().collect())?
+            .bind_descriptor_sets(
+                PipelineBindPoint::Graphics,
+                self.pipeline.layout().clone(),
+                1, mvp
+            )?;
+        if let Some(vertex_buffer) = &self.geometry.vertex_buffer {
+            builder.bind_vertex_buffers(0, vertex_buffer.clone())?;
+        }
+        if let Some(index_buffer) = &self.geometry.index_buffer {
+            let index_count = index_buffer.len() as u32;
+            builder.bind_index_buffer(index_buffer.clone())?;
+            // Draw
+            unsafe { builder.draw_indexed(
+                 index_count, 1,
+                0,
+                0,
+                0
+            )? };
+        }
         Ok(())
     }
 }

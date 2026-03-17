@@ -1,12 +1,15 @@
+use crate::error::Result;
 use std::alloc::Layout;
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::ptr::NonNull;
 use glam::{U8Vec4, Vec2, Vec3};
 use imgui::DrawVert;
-use vulkano::buffer::{BufferContents, BufferContentsLayout};
+use vulkano::buffer::{BufferContents, BufferContentsLayout, BufferUsage, Subbuffer};
 use vulkano::format::Format;
 use vulkano::pipeline::graphics::vertex_input::{Vertex, VertexBufferDescription, VertexInputRate, VertexMemberInfo};
+use crate::geometry::GeometryBufferBuilder;
+use crate::resources::HasStandardMemoryAllocator;
 
 /// Thin wrapper over imgui-rs DrawVert type.
 /// vulkano Vertex types were manually implemented based off the macro generation code
@@ -107,14 +110,14 @@ impl CreateVertexMembers {
     }
 }
 
-#[derive(Debug, BufferContents, Vertex)]
+#[derive(Debug, Copy, Clone, PartialEq, BufferContents, Vertex)]
 #[repr(C)]
 pub struct AppVertex3D {
     #[format(R32G32B32_SFLOAT)]
     pub(crate) pos: [f32; 3],
     #[format(R32G32B32_SFLOAT)]
     pub(crate) nrm: [f32; 3],
-    #[format(R8G8B8A8_UINT)]
+    #[format(R8G8B8A8_UNORM)]
     pub(crate) col: [u8; 4],
     #[format(R32G32_SFLOAT)]
     pub(crate) uv: [f32; 2]
@@ -154,5 +157,11 @@ impl AppDrawData3D {
     }
     pub const fn empty() -> Self {
         Self { vertices: vec![], indices: vec![] }
+    }
+}
+
+impl Default for AppDrawData3D {
+    fn default() -> Self {
+        Self::empty()
     }
 }

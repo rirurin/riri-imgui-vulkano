@@ -1,4 +1,5 @@
 use std::fmt::{Debug, Formatter};
+use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 use glam::{UVec2, Vec2};
 use vulkano::command_buffer::CommandBufferExecFuture;
@@ -17,49 +18,32 @@ use crate::resources::{HasAutoCommandBuffers, HasLogicalDevice, HasPhysicalDevic
 
 pub type FenceFuture = PresentFuture<CommandBufferExecFuture<JoinFuture<Box<dyn GpuFuture>, SwapchainAcquireFuture>>>;
 
-pub struct LibSwapchain {
+pub struct BaseSwapchain {
     pub swapchain: Arc<Swapchain>,
     pub images: Vec<Arc<Image>>,
-    pub depth_stencil: Arc<Image>,
     pub framebuffers: Vec<Arc<Framebuffer>>,
     pub fences: Vec<Option<Arc<FenceSignalFuture<FenceFuture>>>>,
     pub previous_fence: usize,
 }
 
-impl HasSwapchain for LibSwapchain {
+impl HasSwapchain for BaseSwapchain {
     fn swapchain(&self) -> Arc<Swapchain> {
         self.swapchain.clone()
     }
 }
 
-impl Debug for LibSwapchain {
+impl Debug for BaseSwapchain {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "VulkanSwapchainData {{ swapchain: {:?}, images: {:?}, depth_stencil: {:?}, framebuffers: {:?} }}"
-               , self.swapchain, self.images, self.depth_stencil, self.framebuffers)
+        write!(f, "VulkanSwapchainData {{ swapchain: {:?}, images: {:?}, framebuffers: {:?} }}"
+               , self.swapchain, self.images, self.framebuffers)
     }
 }
 
-impl LibSwapchain {
-    fn make_depth_stencil<
-        T: HasStandardMemoryAllocator
-    >(context: &T, extent: [u32; 2]) -> Result<Arc<Image>> {
-        Ok(Image::new(
-            context.allocator(),
-            ImageCreateInfo {
-                image_type: ImageType::Dim2d,
-                format: Format::D16_UNORM,
-                extent: [extent[0], extent[1], 1],
-                usage: ImageUsage::DEPTH_STENCIL_ATTACHMENT | ImageUsage::TRANSIENT_ATTACHMENT,
-                ..Default::default()
-            },
-            AllocationCreateInfo {
-                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
-                ..Default::default()
-            })?
-        )
-    }
-
-    pub fn new<T>(context: &T, window: Arc<Box<dyn Window>>) -> Result<Self>
+impl BaseSwapchain {
+    pub fn create_swapchain_and_images<T>(
+        context: &T,
+        window: Arc<Box<dyn Window>>
+    ) -> Result<(Arc<Swapchain>, Vec<Arc<Image>>)>
     where T: HasPhysicalDevice + HasSurface + HasLogicalDevice + HasStandardMemoryAllocator {
         let image_format = context.physical_device().surface_formats(
             context.surface().as_ref(), Default::default())?[0].0;
@@ -68,7 +52,7 @@ impl LibSwapchain {
         let dimensions = window.surface_size();
         let composite_alpha = capabilities.supported_composite_alpha
             .into_iter().next().ok_or(LibError::NoSurfaceCompositeAlpha)?;
-        let (swapchain, images) = Swapchain::new(
+        Ok(Swapchain::new(
             context.logical_device(),
             context.surface(),
             SwapchainCreateInfo {
@@ -79,44 +63,10 @@ impl LibSwapchain {
                 composite_alpha,
                 ..Default::default()
             }
-        )?;
-        let depth_stencil = Self::make_depth_stencil(context, dimensions.into())?;
-        let framebuffers = vec![];
-        let fences = vec![None; images.len()];
-        let previous_fence = 0;
-        Ok(Self {
-            swapchain, images, depth_stencil, framebuffers, fences, previous_fence
-        })
+        )?)
     }
 
-    pub fn set_framebuffers<T: HasRenderPass>(&mut self, object: &T) -> Result<()> {
-        self.framebuffers = self.images.iter()
-            .map(|image| {
-                let color = ImageView::new_default(image.clone())?;
-                Ok(Framebuffer::new(
-                    object.render_pass(),
-                    FramebufferCreateInfo {
-                        attachments: vec![color],
-                        ..Default::default()
-                    },
-                )?)
-            }).collect::<Result<Vec<Arc<Framebuffer>>>>()?;
-        Ok(())
-    }
-
-    pub fn refresh<
-        T0: HasStandardMemoryAllocator,
-        T1: HasRenderPass
-    >(&mut self, context: &T0, render_pass: &T1, extent: UVec2) -> Result<()> {
-        self.depth_stencil = Self::make_depth_stencil(context, extent.to_array())?;
-        (self.swapchain, self.images) = self.swapchain.recreate(SwapchainCreateInfo {
-            image_extent: extent.to_array(), ..self.swapchain.create_info()
-        })?;
-        self.set_framebuffers(render_pass)?;
-        Ok(())
-    }
-
-    pub fn present<
+    fn present_inner<
         T0: HasLogicalDevice + HasQueue,
         T1: HasAutoCommandBuffers
     >(&mut self, device: &T0, buffers: &T1) -> Result<bool> {
@@ -156,5 +106,94 @@ impl LibSwapchain {
         };
         self.previous_fence = image_index;
         Ok(recreate_swapchain)
+    }
+
+    pub fn new<T>(context: &T, window: Arc<Box<dyn Window>>) -> Result<Self>
+    where T: HasPhysicalDevice + HasSurface + HasLogicalDevice + HasStandardMemoryAllocator {
+        let (swapchain, images)
+            = BaseSwapchain::create_swapchain_and_images(context, window.clone())?;
+        let framebuffers = vec![];
+        let fences = vec![None; images.len()];
+        let previous_fence = 0;
+        Ok(Self {
+            swapchain, images, framebuffers, fences, previous_fence
+        })
+    }
+}
+
+pub trait SwapchainImpl: Deref<Target = BaseSwapchain> + DerefMut<Target = BaseSwapchain> {
+    fn make_framebuffer<R: HasRenderPass>(&self, image: Arc<Image>, render_pass: &R) -> Result<Arc<Framebuffer>>;
+    fn set_framebuffers<R: HasRenderPass>(&mut self, render_pass: &R) -> Result<()> {
+        self.framebuffers = self.images.iter()
+            .map(|image| self.make_framebuffer(image.clone(), render_pass))
+            .collect::<Result<Vec<Arc<Framebuffer>>>>()?;
+        Ok(())
+    }
+    fn present<
+        T0: HasLogicalDevice + HasQueue,
+        T1: HasAutoCommandBuffers
+    >(&mut self, device: &T0, buffers: &T1) -> Result<bool> {
+        self.present_inner(device, buffers)
+    }
+    fn refresh<
+        T0: HasStandardMemoryAllocator,
+        T1: HasRenderPass
+    >(&mut self, context: &T0, render_pass: &T1, extent: UVec2) -> Result<()>;
+}
+
+#[derive(Debug)]
+pub struct LibSwapchain {
+    pub base: BaseSwapchain
+}
+
+impl HasSwapchain for LibSwapchain {
+    fn swapchain(&self) -> Arc<Swapchain> {
+        self.base.swapchain.clone()
+    }
+}
+
+impl Deref for LibSwapchain {
+    type Target = BaseSwapchain;
+    fn deref(&self) -> &Self::Target {
+        &self.base
+    }
+}
+
+impl DerefMut for LibSwapchain {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.base
+    }
+}
+
+impl SwapchainImpl for LibSwapchain {
+    fn make_framebuffer<R: HasRenderPass>(&self, image: Arc<Image>, render_pass: &R) -> Result<Arc<Framebuffer>> {
+        let color = ImageView::new_default(image.clone())?;
+        Ok(Framebuffer::new(
+            render_pass.render_pass(),
+            FramebufferCreateInfo {
+                attachments: vec![color],
+                ..Default::default()
+            },
+        )?)
+    }
+
+    fn refresh<
+        T0: HasStandardMemoryAllocator,
+        T1: HasRenderPass
+    >(&mut self, _: &T0, render_pass: &T1, extent: UVec2) -> Result<()> {
+        (self.swapchain, self.images) = self.swapchain.recreate(SwapchainCreateInfo {
+            image_extent: extent.to_array(), ..self.swapchain.create_info()
+        })?;
+        self.set_framebuffers(render_pass)?;
+        Ok(())
+    }
+}
+
+impl LibSwapchain {
+    pub fn new<T>(context: &T, window: Arc<Box<dyn Window>>) -> Result<Self>
+    where T: HasPhysicalDevice + HasSurface + HasLogicalDevice + HasStandardMemoryAllocator {
+        Ok(Self {
+            base: BaseSwapchain::new(context, window)?
+        })
     }
 }

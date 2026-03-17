@@ -1,79 +1,44 @@
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 use std::time::Instant;
-use glam::{UVec2, Vec2};
+use glam::{UVec2, Vec2, Vec4};
 use imgui::DrawData;
 use riri_mod_tools_rt::logln;
 use vulkano::command_buffer::PrimaryAutoCommandBuffer;
 use vulkano::format::ClearValue;
 use vulkano::pipeline::graphics::viewport::{Scissor, Viewport};
 use winit::window::Window;
-use riri_imgui_vulkano::commands::{DrawImgui, GpuCommandAllocator, GpuCommandBuilder, GpuCommandSet, GpuCommandUsageOnce};
+use riri_imgui_vulkano::commands::{DrawBasic3d, DrawImgui, EndRenderPass, GpuCommandAllocator, GpuCommandBuilder, GpuCommandSet, GpuCommandUsageOnce, StartRenderPass};
 use riri_imgui_vulkano::context::RendererContext;
-use riri_imgui_vulkano::descriptors::LibDescriptorSets;
-use riri_imgui_vulkano::viewport::{ScissorBuilder, ViewportBuilder};
-// use riri_imgui_vulkano::commands::LibCommandBuffers;
+use riri_imgui_vulkano::descriptors::{Basic3dMVPUniform, ImguiFontBuilder, ImguiOrthoUniform, LibDescriptorSets};
 use riri_imgui_vulkano::geometry::ImguiGeometry;
-use riri_imgui_vulkano::pipeline::{ ImguiGraphicsPipeline, CreateGraphicsPipeline };
+use riri_imgui_vulkano::viewport::{ScissorBuilder, ViewportBuilder};
+use riri_imgui_vulkano::pipeline::{ImguiGraphicsPipeline, CreateGraphicsPipeline, Basic3dGraphicsPipeline};
 use riri_imgui_vulkano::render_pass::{ImguiRenderPass, LibRenderPass, RenderPassBuilder};
 use riri_imgui_vulkano::resources::{HasAutoCommandBuffers, HasGraphicsPipeline, HasLogicalDevice, HasPhysicalDevice, HasQueue, HasRenderPass, HasStandardMemoryAllocator, HasSwapchain};
 use riri_imgui_vulkano::shaders::{LibShaderRegistry, ShaderRegistry};
-use riri_imgui_vulkano::swapchain::LibSwapchain;
-use riri_imgui_vulkano::geometry::ImguiFontBuilder;
+use riri_imgui_vulkano::swapchain::{LibSwapchain, SwapchainImpl};
+use riri_imgui_vulkano::vertex::AppDrawData3D;
+use crate::camera::{Camera, DEFAULT_CAMERA};
+use crate::renderer::commands::AppGpuCommands;
+use crate::renderer::pipeline::AppPipeline;
+use crate::renderer::render_pass::AppRenderPass;
+use crate::renderer::swapchain::AppSwapchain;
 use crate::result::Result;
-
-#[derive(Debug)]
-pub struct AppGpuCommands {
-    pub(crate) allocator: GpuCommandAllocator,
-    pub(crate) buffers: Vec<Arc<PrimaryAutoCommandBuffer>>,
-}
-
-impl AppGpuCommands {
-    pub fn new<C>(
-        context: &C,
-        viewport: &Viewport,
-        swapchain: &LibSwapchain,
-        pipeline: &ImguiGraphicsPipeline,
-        geom_imgui: ImguiGeometry,
-        clear_color: ClearValue,
-        descriptors: &LibDescriptorSets
-    ) -> Result<Self>
-    where C: HasLogicalDevice + HasQueue {
-        let allocator = GpuCommandAllocator::new(context);
-        let buffers = swapchain.framebuffers.iter().map(|framebuffer| {
-            let mut builder: GpuCommandBuilder<_, GpuCommandUsageOnce>
-                = GpuCommandBuilder::new(&allocator, context)?;
-            DrawImgui::new(
-                clear_color,
-                framebuffer.clone(),
-                pipeline.graphics_pipeline(),
-                &geom_imgui,
-                viewport.clone(),
-                descriptors
-            )?.build(&mut builder)?;
-            Ok(builder.build()?)
-        }).collect::<Result<Vec<Arc<PrimaryAutoCommandBuffer>>>>()?;
-        Ok(Self { allocator, buffers })
-    }
-}
-
-impl HasAutoCommandBuffers for AppGpuCommands {
-    fn buffer(&self, index: usize) -> Option<Arc<PrimaryAutoCommandBuffer>> {
-        self.buffers.get(index).map(|v| v.clone())
-    }
-}
 
 #[derive(Debug)]
 pub struct VulkanContext {
     pub(crate) context: RendererContext,
     pub(crate) viewport: Viewport,
-    pub(crate) swapchain: LibSwapchain,
+    pub(crate) swapchain: AppSwapchain,
     pub(crate) render_pass: LibRenderPass,
     pub(crate) descriptors: LibDescriptorSets,
     pub(crate) shaders: LibShaderRegistry,
-    pub(crate) pipeline: ImguiGraphicsPipeline,
+    pub(crate) pipeline: AppPipeline,
     pub(crate) gpu_commands: AppGpuCommands,
     pub(crate) clear_color: ClearValue,
+    pub(crate) ortho_builder: ImguiOrthoUniform,
+    pub(crate) basic3d_mvp: Basic3dMVPUniform,
 }
 
 impl VulkanContext {
@@ -90,21 +55,29 @@ impl VulkanContext {
         );
 
         let mut descriptors = LibDescriptorSets::new(&context)?;
-        let mut swapchain = LibSwapchain::new(&context, window.clone())?;
-        let render_pass = ImguiRenderPass::new(&context, swapchain.swapchain()).build()?;
+        let mut swapchain = AppSwapchain::new(&context, window.clone())?;
+        let render_pass = AppRenderPass::new(&context, swapchain.swapchain()).build()?;
         swapchain.set_framebuffers(&render_pass)?;
 
         // ImGui_ImplVulkan_CreateShaderModules
         let mut shaders = LibShaderRegistry::default();
         Self::create_shader_modules(&context, &mut shaders)?;
 
-        let pipeline = ImguiGraphicsPipeline::new(
-            &context, &viewport, &scissor, &shaders, &render_pass)?;
+        let pipeline = AppPipeline::new(
+            Basic3dGraphicsPipeline::<0>::new(
+                &context, &viewport, &scissor, &shaders, &render_pass)?,
+            ImguiGraphicsPipeline::<1>::new(
+                &context, &viewport, &scissor, &shaders, &render_pass)?,
+        );
         let clear_color = ClearValue::Float([0.1, 0.1, 0.1, 1.]);
 
+        let mut ortho_builder = ImguiOrthoUniform::new();
+        let mut basic3d_mvp = Basic3dMVPUniform::new();
         let gpu_commands = AppGpuCommands::new(
-            &context, &viewport, &swapchain, &pipeline, // None,
-            ImguiGeometry::default(), clear_color.clone(), &descriptors)?;
+            &context, &viewport, &swapchain, &pipeline,
+            ImguiGeometry::default(), &AppDrawData3D::default(),
+            clear_color.clone(), &shaders, &mut descriptors,
+            &mut ortho_builder, &DEFAULT_CAMERA, &mut basic3d_mvp)?;
         ImguiFontBuilder::build(
             &context, &shaders, &mut descriptors,
             &gpu_commands.allocator, imgui.fonts())?;
@@ -132,6 +105,8 @@ impl VulkanContext {
             pipeline,
             gpu_commands,
             clear_color,
+            ortho_builder,
+            basic3d_mvp
         })
     }
 
@@ -159,12 +134,16 @@ impl VulkanContext {
         let exec_path = std::env::current_exe()?.parent().map(|v| v.to_owned()).unwrap();
         shaders.add_vertex_shader(context, exec_path.join("shaders/imgui.vs"))?;
         shaders.add_pixel_shader(context, exec_path.join("shaders/imgui.ps"))?;
+        shaders.add_vertex_shader(context, exec_path.join("shaders/basic3d.vs"))?;
+        shaders.add_pixel_shader(context, exec_path.join("shaders/basic3d.ps"))?;
         Ok(())
     }
 
-    pub(crate) fn render_imgui(
+    pub(crate) fn render(
         &mut self,
         draw_data: &DrawData,
+        draw3d: &AppDrawData3D,
+        camera: &Camera,
     ) -> Result<()> {
         let imgui_geometry = ImguiGeometry::new(&self.context, draw_data)?;
         let framebuffer_size = Vec2::new(
@@ -173,8 +152,9 @@ impl VulkanContext {
         );
         self.viewport = ViewportBuilder::from_extent(framebuffer_size);
         self.gpu_commands = AppGpuCommands::new(
-            &self.context, &self.viewport, &self.swapchain, &self.pipeline, // None,
-             imgui_geometry, self.clear_color.clone(), &self.descriptors)?;
+            &self.context, &self.viewport, &self.swapchain, &self.pipeline,
+            imgui_geometry, draw3d, self.clear_color.clone(), &self.shaders,
+            &mut self.descriptors, &mut self.ortho_builder, camera, &mut self.basic3d_mvp)?;
         Ok(())
     }
 }

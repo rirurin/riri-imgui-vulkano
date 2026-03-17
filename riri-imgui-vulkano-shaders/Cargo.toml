@@ -9,5 +9,5 @@ license-file.workspace = true
 edition.workspace = true
 
 [dependencies]
-bitflags = "2.11.0"
+bitflags = "2.11"
 shaderc = "0.10.1"

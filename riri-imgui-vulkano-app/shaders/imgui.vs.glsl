@@ -4,7 +4,7 @@ layout(location = 0) in vec2 pos;
 layout(location = 1) in vec2 uv;
 layout(location = 2) in vec4 col;
 
-layout(push_constant) uniform Matrices {
+layout(set = 1, binding = 0) uniform Matrices {
     mat4 ortho;
 } matrices;
 

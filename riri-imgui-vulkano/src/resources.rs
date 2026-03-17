@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use vulkano::command_buffer::allocator::StandardCommandBufferAllocator;
 use vulkano::command_buffer::PrimaryAutoCommandBuffer;
+use vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator;
 use vulkano::device::{Device, Queue};
 use vulkano::device::physical::PhysicalDevice;
 use vulkano::instance::Instance;
@@ -55,4 +56,8 @@ pub trait HasCommandBufferAllocator {
 
 pub trait HasAutoCommandBuffers {
     fn buffer(&self, index: usize) -> Option<Arc<PrimaryAutoCommandBuffer>>;
+}
+
+pub trait HasStandardDescriptorSetAllocator {
+    fn allocator(&self) -> Arc<StandardDescriptorSetAllocator>;
 }

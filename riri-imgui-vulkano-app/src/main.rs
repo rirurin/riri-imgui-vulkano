@@ -1,10 +1,16 @@
-pub(crate) mod app;
-pub(crate) mod clipboard;
-pub(crate) mod color;
-pub(crate) mod logger;
-pub(crate) mod renderer;
-pub(crate) mod result;
-pub(crate) mod version;
+mod app;
+mod camera;
+mod color;
+mod logger;
+mod renderer {
+    pub(crate) mod commands;
+    pub(crate) mod context;
+    pub(crate) mod pipeline;
+    pub(crate) mod render_pass;
+    pub(crate) mod swapchain;
+}
+mod result;
+mod version;
 
 fn main() {
     logger::Logger::init_task();

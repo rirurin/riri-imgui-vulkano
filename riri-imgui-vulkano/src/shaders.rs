@@ -11,11 +11,26 @@ use crate::error::{LibError, Result};
 use crate::resources::HasLogicalDevice;
 
 pub trait ShaderRegistry {
+    /// Try to get a shader from the registry with the given name.
     fn get(&self, key: &str) -> Option<&AppShader>;
+    /// Try to get references for the vertex and pixel shaders.
+    /// This will error if your app doesn't load these shaders first.
+    fn try_get_vertex_pixel(&self, vertex: &str, pixel: &str) -> Result<(&AppShader, &AppShader)>;
+    /// Add a pixel (fragment) shader into the registry.
     fn add_pixel_shader<T: HasLogicalDevice, P: AsRef<Path>>(&mut self, object: &T, path: P) -> Result<()>;
+    /// Add a vertex shader into the registry.
     fn add_vertex_shader<T: HasLogicalDevice, P: AsRef<Path>>(&mut self, object: &T, path: P) -> Result<()>;
+    /// Add a compute shader into the registry.
     fn add_compute_shader<T: HasLogicalDevice, P: AsRef<Path>>(&mut self, object: &T, path: P) -> Result<()>;
+    /// Add a geometry shader into the registry.
     fn add_geometry_shader<T: HasLogicalDevice, P: AsRef<Path>>(&mut self, object: &T, path: P) -> Result<()>;
+}
+
+#[macro_export]
+macro_rules! try_get_vertex_pixel {
+    ($registry:ident, $name:literal) => {
+        $registry.try_get_vertex_pixel(concat!($name, ".vs"), concat!($name, ".ps"))
+    }
 }
 
 #[derive(Debug)]
@@ -44,6 +59,13 @@ impl DerefMut for LibShaderRegistry {
 impl ShaderRegistry for LibShaderRegistry {
     fn get(&self, key: &str) -> Option<&AppShader> {
         self.0.get(key)
+    }
+
+    fn try_get_vertex_pixel(&self, vertex: &str, pixel: &str) -> Result<(&AppShader, &AppShader)> {
+        Ok((
+            self.get(vertex).ok_or(LibError::CouldNotFindShader(vertex.to_owned()))?,
+            self.get(pixel).ok_or(LibError::CouldNotFindShader(pixel.to_owned()))?,
+        ))
     }
 
     fn add_pixel_shader<T: HasLogicalDevice, P: AsRef<Path>>(&mut self, object: &T, path: P) -> Result<()> {
