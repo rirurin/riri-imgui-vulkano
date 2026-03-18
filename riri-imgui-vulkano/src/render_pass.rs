@@ -113,7 +113,7 @@ impl<'a, T: Debug + HasLogicalDevice> Basic3dRenderPass<'a, T> {
 
 impl<'a, T: Debug + HasLogicalDevice> RenderPassBuilder for Basic3dRenderPass<'a, T> {
     fn build(&self) -> Result<LibRenderPass> {
-        Ok(LibRenderPass(vulkano::single_pass_renderpass!(
+        Ok(vulkano::single_pass_renderpass!(
             self.context.logical_device(),
             attachments: {
                 color: {
@@ -126,13 +126,13 @@ impl<'a, T: Debug + HasLogicalDevice> RenderPassBuilder for Basic3dRenderPass<'a
                     format: Format::D16_UNORM,
                     samples: 1,
                     load_op: Clear,
-                    store_op: DontCare,
+                    store_op: DontCare
                 }
             },
             pass: {
                 color: [color],
-                depth_stencil: {depth}
+                depth_stencil: {depth},
             }
-        )?))
+        )?.into())
     }
 }

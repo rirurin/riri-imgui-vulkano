@@ -1,6 +1,6 @@
 use crate::result::Result;
-use riri_imgui_vulkano::render_pass::{BaseRenderPass, ImguiRenderPass, LibRenderPass, RenderPassBuilder};
-use riri_imgui_vulkano::resources::{HasLogicalDevice, HasRenderPass, HasSwapchain};
+use riri_imgui_vulkano::render_pass::{BaseRenderPass, LibRenderPass, RenderPassBuilder};
+use riri_imgui_vulkano::resources::HasLogicalDevice;
 use std::fmt::Debug;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;

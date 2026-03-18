@@ -2,8 +2,10 @@ use crate::camera::Camera;
 use crate::color::ColorConverter;
 use crate::renderer::context::VulkanContext;
 use crate::result::Result;
+use gilrs_imgui_support::debug::GamepadVisualDebug;
+use gilrs_imgui_support::state::{GamepadBuilder, GamepadState};
 use glam::{U8Vec4, Vec2, Vec3};
-use imgui::{BackendFlags, ConfigFlags, Context as ImContext, FontGlyphRanges, FontId, ImColor32, Key};
+use imgui::{BackendFlags, ConfigFlags, Context as ImContext, FontGlyphRanges, FontId, ImColor32};
 use imgui_winit_support::{HiDpiMode, WinitPlatform};
 use riri_imgui_vulkano::context::RendererContext;
 use riri_imgui_vulkano::vertex::{AppDrawData3D, AppVertex3D};
@@ -11,11 +13,10 @@ use riri_inspector_components::clipboard::ClipboardSupport;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
-use gilrs_imgui_support::state::GamepadState;
 use vulkano::format::ClearValue;
 use winit::application::ApplicationHandler;
 use winit::dpi::{PhysicalPosition, PhysicalSize, Position, Size};
-use winit::event::{DeviceEvent, DeviceId, WindowEvent};
+use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::icon::Icon;
 #[cfg(target_os = "windows")]
@@ -35,6 +36,7 @@ pub(crate) struct App {
     gamepad: GamepadState,
 
     last_frame: Instant,
+    time_elapsed: f32,
     count: usize,
 }
 
@@ -55,7 +57,8 @@ impl App {
             last_frame: Instant::now(),
             camera: Camera::new(),
             data3d: Self::get_sample_data(),
-            gamepad: GamepadState::new()?,
+            gamepad: GamepadBuilder::new().set_axis_to_btn(0.5, 0.4).build()?,
+            time_elapsed: 0.,
             count: 0,
         })
     }
@@ -68,14 +71,17 @@ impl App {
         self.window.as_ref().unwrap().clone()
     }
 
+    #[allow(dead_code)]
     pub fn get_platform(&self) -> &WinitPlatform {
         self.platform.as_ref().unwrap()
     }
 
+    #[allow(dead_code)]
     pub fn get_platform_mut(&mut self) -> &mut WinitPlatform {
         self.platform.as_mut().unwrap()
     }
 
+    #[allow(dead_code)]
     pub fn get_imgui(&self) -> &ImContext {
         self.imgui.as_ref().unwrap()
     }
@@ -196,6 +202,7 @@ impl ApplicationHandler for App {
                 let now = Instant::now();
                 imgui.io_mut().update_delta_time(now - self.last_frame);
                 let delta_time = imgui.io().delta_time;
+                self.time_elapsed += delta_time;
                 self.last_frame = now;
                 self.count = self.count.overflowing_add(1).0;
                 self.gamepad.update(imgui);
@@ -203,15 +210,22 @@ impl ApplicationHandler for App {
                 let ui = imgui.new_frame();
                 self.camera.update(ui, delta_time);
                 let mut show = true;
+                if let Some(main) = ui.begin_main_menu_bar() {
+                    main.end()
+                }
                 AppDebugInfo::new(&self.fonts, ui, &self.camera, window.clone()).draw();
+                GamepadVisualDebug::new(&self.gamepad)
+                    .top_left(Vec2::new(10., 20.))
+                    .build(ui);
                 ui.show_demo_window(&mut show);
                 let draw_data = imgui.render();
                 let clear_color = ColorConverter::hsv_to_rgb(
-                    (self.count as f32 / 300.) % 1., 0.25, 0.6);
+                    (self.count as f32 / 300.) % 1., 0.25, 0.35);
                 if let ClearValue::Float(v) = &mut renderer.clear_color {
                     *v = [clear_color.x, clear_color.y, clear_color.z, 1.];
                 }
-                renderer.render(draw_data, &self.data3d, &self.camera).unwrap();
+                renderer.render(
+                    draw_data, &self.data3d, &self.camera, self.time_elapsed).unwrap();
                 if renderer.present().unwrap() {
                     renderer.refresh(window.clone()).unwrap();
                 }

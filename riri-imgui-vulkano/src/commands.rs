@@ -2,14 +2,14 @@ use std::fmt::{Debug, Formatter};
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
-use glam::{Mat4, Vec2, Vec4};
+use glam::{Vec2, Vec4};
 use imgui::{DrawCmd, DrawCmdParams, TextureId};
 use imgui::internal::RawWrapper;
 use riri_mod_tools_rt::logln;
 use vulkano::buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer};
 use vulkano::command_buffer::allocator::{StandardCommandBufferAllocator, StandardCommandBufferAllocatorCreateInfo};
 use vulkano::command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, CopyBufferToImageInfo, CopyImageToBufferInfo, PrimaryAutoCommandBuffer, RenderPassBeginInfo, SubpassBeginInfo, SubpassContents, SubpassEndInfo};
-use vulkano::format::{ClearValue, Format};
+use vulkano::format::ClearValue;
 use vulkano::image::Image;
 use vulkano::memory::allocator::{AllocationCreateInfo, MemoryTypeFilter};
 use vulkano::pipeline::graphics::viewport::{Scissor, Viewport};
@@ -79,6 +79,7 @@ impl GpuCommandUsage for GpuCommandUsageAsync {
 
 type GpuBuilder = AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>;
 
+#[allow(dead_code)]
 pub struct GpuCommandBuilder<'a, A: HasCommandBufferAllocator, U: GpuCommandUsage> {
     allocator: &'a A,
     builder: GpuBuilder,

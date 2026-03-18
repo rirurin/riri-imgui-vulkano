@@ -55,14 +55,16 @@ impl Camera {
         self.up = dir.cross(r).normalize_or_zero().into();
     }
 
-    pub fn calculate_mvp(&self, viewport: &Viewport) -> (Mat4, Mat4) {
+    pub fn calculate_mvp(&self, viewport: &Viewport, time_elapsed: f32) -> (Mat4, Mat4) {
         // View Projection
         let view = Mat4::look_at_rh(self.eye.into(), self.lookat.into(), self.up.into());
         let fovy_rad = self.fovy * std::f32::consts::PI / 180.;
         let proj = Mat4::perspective_rh(fovy_rad, viewport.extent[0] / viewport.extent[1], self.near_clip, self.far_clip);
         let view_projection = proj * view;
         // Model
-        let model = Mat4::from_rotation_translation(Quat::IDENTITY, Vec3::ZERO);
+        let rt = time_elapsed % (std::f32::consts::PI * 2.);
+        let rotation = Quat::from_euler(glam::EulerRot::XYZEx, rt, rt, 0.,);
+        let model = Mat4::from_rotation_translation(rotation, Vec3::ZERO);
         (view_projection, model)
     }
 }

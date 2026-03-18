@@ -1,25 +1,24 @@
+use crate::commands::{CopyBufferToImage, GpuCommandAllocator, GpuCommandBuilder, GpuCommandSet, GpuCommandUsageOnce};
 use crate::error::{LibError, Result};
+use crate::geometry::GeometryBufferBuilder;
 use crate::pipeline::PipelineLayoutBuilder;
 use crate::resources::{HasLogicalDevice, HasQueue, HasStandardDescriptorSetAllocator, HasStandardMemoryAllocator};
 use crate::shaders::{AppShader, ShaderRegistry};
+use crate::try_get_vertex_pixel;
+use glam::Mat4;
 use imgui::TextureId;
 use std::collections::HashMap;
-use std::marker::PhantomData;
 use std::sync::{Arc, Weak};
-use glam::Mat4;
-use vulkano::buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage};
+use vulkano::buffer::{BufferContents, BufferUsage};
 use vulkano::descriptor_set::allocator::StandardDescriptorSetAllocator;
 use vulkano::descriptor_set::{CopyDescriptorSet, DescriptorSet, WriteDescriptorSet};
 use vulkano::format::Format;
-use vulkano::image::{Image, ImageCreateFlags, ImageCreateInfo, ImageSubresourceRange, ImageTiling, ImageType, ImageUsage, SampleCount};
 use vulkano::image::sampler::{Sampler, SamplerCreateInfo};
 use vulkano::image::view::{ImageView, ImageViewCreateInfo, ImageViewType};
+use vulkano::image::{Image, ImageCreateFlags, ImageCreateInfo, ImageSubresourceRange, ImageTiling, ImageType, ImageUsage, SampleCount};
 use vulkano::memory::allocator::{AllocationCreateInfo, MemoryTypeFilter};
 use vulkano::sync;
 use vulkano::sync::GpuFuture;
-use crate::commands::{CopyBufferToImage, GpuCommandAllocator, GpuCommandBuilder, GpuCommandSet, GpuCommandUsageOnce};
-use crate::geometry::GeometryBufferBuilder;
-use crate::try_get_vertex_pixel;
 
 pub trait DescriptorSetRegistry {
     /// Tries to get the descriptor set that matches the given key.

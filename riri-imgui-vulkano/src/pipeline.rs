@@ -188,6 +188,7 @@ impl<const I: usize> CreateGraphicsPipeline for Basic3dGraphicsPipeline<I> {
             .ok_or(LibError::FailToGetSubBuffer)?;
         let mut dynamic_state = HashSet::default();
         dynamic_state.insert(DynamicState::Viewport);
+        // dynamic_state.insert(DynamicState::Scissor);
         Ok(Self(GraphicsPipeline::new(
             context.logical_device(),
             None,
@@ -201,6 +202,7 @@ impl<const I: usize> CreateGraphicsPipeline for Basic3dGraphicsPipeline<I> {
                 // Set the viewport
                 viewport_state: Some(ViewportState {
                     viewports: [viewport.clone()].into_iter().collect(),
+                    // scissors: [scissor.clone()].into_iter().collect(),
                     ..Default::default()
                 }),
                 rasterization_state: Some(RasterizationState::default()),

@@ -1,20 +1,18 @@
+use crate::error::{LibError, Result};
+use crate::resources::{HasAutoCommandBuffers, HasLogicalDevice, HasPhysicalDevice, HasQueue, HasRenderPass, HasStandardMemoryAllocator, HasSurface, HasSwapchain};
+use glam::UVec2;
 use std::fmt::{Debug, Formatter};
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
-use glam::{UVec2, Vec2};
 use vulkano::command_buffer::CommandBufferExecFuture;
-use vulkano::format::Format;
-use vulkano::image::{Image, ImageCreateInfo, ImageType, ImageUsage};
 use vulkano::image::view::ImageView;
-use vulkano::memory::allocator::{AllocationCreateInfo, MemoryTypeFilter};
+use vulkano::image::{Image, ImageUsage};
 use vulkano::render_pass::{Framebuffer, FramebufferCreateInfo};
 use vulkano::swapchain::{PresentFuture, Swapchain, SwapchainAcquireFuture, SwapchainCreateInfo, SwapchainPresentInfo};
 use vulkano::sync::future::{FenceSignalFuture, JoinFuture};
 use vulkano::sync::GpuFuture;
 use vulkano::{sync, Validated, VulkanError};
 use winit::window::Window;
-use crate::error::{ LibError, Result };
-use crate::resources::{HasAutoCommandBuffers, HasLogicalDevice, HasPhysicalDevice, HasQueue, HasRenderPass, HasStandardMemoryAllocator, HasSurface, HasSwapchain};
 
 pub type FenceFuture = PresentFuture<CommandBufferExecFuture<JoinFuture<Box<dyn GpuFuture>, SwapchainAcquireFuture>>>;
 

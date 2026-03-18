@@ -1,15 +1,12 @@
-use crate::error::Result;
+use glam::{U8Vec4, Vec2, Vec3};
+use imgui::DrawVert;
 use std::alloc::Layout;
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::ptr::NonNull;
-use glam::{U8Vec4, Vec2, Vec3};
-use imgui::DrawVert;
-use vulkano::buffer::{BufferContents, BufferContentsLayout, BufferUsage, Subbuffer};
+use vulkano::buffer::{BufferContents, BufferContentsLayout};
 use vulkano::format::Format;
 use vulkano::pipeline::graphics::vertex_input::{Vertex, VertexBufferDescription, VertexInputRate, VertexMemberInfo};
-use crate::geometry::GeometryBufferBuilder;
-use crate::resources::HasStandardMemoryAllocator;
 
 /// Thin wrapper over imgui-rs DrawVert type.
 /// vulkano Vertex types were manually implemented based off the macro generation code

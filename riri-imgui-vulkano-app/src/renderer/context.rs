@@ -1,23 +1,20 @@
-use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 use std::time::Instant;
-use glam::{UVec2, Vec2, Vec4};
+use glam::{UVec2, Vec2};
 use imgui::DrawData;
 use riri_mod_tools_rt::logln;
-use vulkano::command_buffer::PrimaryAutoCommandBuffer;
 use vulkano::format::ClearValue;
-use vulkano::pipeline::graphics::viewport::{Scissor, Viewport};
+use vulkano::pipeline::graphics::viewport::Viewport;
 use winit::window::Window;
-use riri_imgui_vulkano::commands::{DrawBasic3d, DrawImgui, EndRenderPass, GpuCommandAllocator, GpuCommandBuilder, GpuCommandSet, GpuCommandUsageOnce, StartRenderPass};
 use riri_imgui_vulkano::context::RendererContext;
 use riri_imgui_vulkano::descriptors::{Basic3dMVPUniform, ImguiFontBuilder, ImguiOrthoUniform, LibDescriptorSets};
 use riri_imgui_vulkano::geometry::ImguiGeometry;
 use riri_imgui_vulkano::viewport::{ScissorBuilder, ViewportBuilder};
 use riri_imgui_vulkano::pipeline::{ImguiGraphicsPipeline, CreateGraphicsPipeline, Basic3dGraphicsPipeline};
-use riri_imgui_vulkano::render_pass::{ImguiRenderPass, LibRenderPass, RenderPassBuilder};
-use riri_imgui_vulkano::resources::{HasAutoCommandBuffers, HasGraphicsPipeline, HasLogicalDevice, HasPhysicalDevice, HasQueue, HasRenderPass, HasStandardMemoryAllocator, HasSwapchain};
+use riri_imgui_vulkano::render_pass::{LibRenderPass, RenderPassBuilder};
+use riri_imgui_vulkano::resources::{HasPhysicalDevice, HasSwapchain};
 use riri_imgui_vulkano::shaders::{LibShaderRegistry, ShaderRegistry};
-use riri_imgui_vulkano::swapchain::{LibSwapchain, SwapchainImpl};
+use riri_imgui_vulkano::swapchain::SwapchainImpl;
 use riri_imgui_vulkano::vertex::AppDrawData3D;
 use crate::camera::{Camera, DEFAULT_CAMERA};
 use crate::renderer::commands::AppGpuCommands;
@@ -77,7 +74,7 @@ impl VulkanContext {
             &context, &viewport, &swapchain, &pipeline,
             ImguiGeometry::default(), &AppDrawData3D::default(),
             clear_color.clone(), &shaders, &mut descriptors,
-            &mut ortho_builder, &DEFAULT_CAMERA, &mut basic3d_mvp)?;
+            &mut ortho_builder, &DEFAULT_CAMERA, &mut basic3d_mvp, 0.)?;
         ImguiFontBuilder::build(
             &context, &shaders, &mut descriptors,
             &gpu_commands.allocator, imgui.fonts())?;
@@ -144,6 +141,7 @@ impl VulkanContext {
         draw_data: &DrawData,
         draw3d: &AppDrawData3D,
         camera: &Camera,
+        time_elapsed: f32,
     ) -> Result<()> {
         let imgui_geometry = ImguiGeometry::new(&self.context, draw_data)?;
         let framebuffer_size = Vec2::new(
@@ -154,7 +152,8 @@ impl VulkanContext {
         self.gpu_commands = AppGpuCommands::new(
             &self.context, &self.viewport, &self.swapchain, &self.pipeline,
             imgui_geometry, draw3d, self.clear_color.clone(), &self.shaders,
-            &mut self.descriptors, &mut self.ortho_builder, camera, &mut self.basic3d_mvp)?;
+            &mut self.descriptors, &mut self.ortho_builder, camera,
+            &mut self.basic3d_mvp, time_elapsed)?;
         Ok(())
     }
 }

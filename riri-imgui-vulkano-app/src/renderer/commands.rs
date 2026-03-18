@@ -1,21 +1,17 @@
+use crate::camera::Camera;
 use crate::renderer::pipeline::AppPipeline;
+use crate::renderer::swapchain::AppSwapchain;
 use crate::result::Result;
 use riri_imgui_vulkano::commands::{DrawBasic3d, DrawImgui, EndRenderPass, GpuCommandAllocator, GpuCommandBuilder, GpuCommandSet, GpuCommandUsageOnce, NextSubpass, StartRenderPass};
 use riri_imgui_vulkano::descriptors::{Basic3dMVPUniform, ImguiOrthoUniform, LibDescriptorSets};
 use riri_imgui_vulkano::geometry::{BasicDrawGeometry, ImguiGeometry};
-use riri_imgui_vulkano::pipeline::CreateGraphicsPipeline;
-use riri_imgui_vulkano::render_pass::RenderPassBuilder;
-use riri_imgui_vulkano::resources::{HasAutoCommandBuffers, HasGraphicsPipeline, HasLogicalDevice, HasQueue, HasRenderPass, HasStandardMemoryAllocator, HasSwapchain};
-use riri_imgui_vulkano::shaders::{LibShaderRegistry, ShaderRegistry};
-use riri_imgui_vulkano::swapchain::LibSwapchain;
+use riri_imgui_vulkano::resources::{HasAutoCommandBuffers, HasGraphicsPipeline, HasLogicalDevice, HasQueue, HasStandardMemoryAllocator};
+use riri_imgui_vulkano::shaders::LibShaderRegistry;
+use riri_imgui_vulkano::vertex::AppDrawData3D;
 use std::sync::Arc;
-use glam::Mat4;
 use vulkano::command_buffer::PrimaryAutoCommandBuffer;
 use vulkano::format::ClearValue;
 use vulkano::pipeline::graphics::viewport::Viewport;
-use riri_imgui_vulkano::vertex::AppDrawData3D;
-use crate::camera::Camera;
-use crate::renderer::swapchain::AppSwapchain;
 
 #[derive(Debug)]
 pub struct AppGpuCommands {
@@ -37,10 +33,11 @@ impl AppGpuCommands {
         ortho_uniform: &mut ImguiOrthoUniform,
         camera: &Camera,
         basic3d_mvp: &mut Basic3dMVPUniform,
+        time_elapsed: f32,
     ) -> Result<Self>
     where C: HasLogicalDevice + HasStandardMemoryAllocator + HasQueue {
         let allocator = GpuCommandAllocator::new(context);
-        let (vp, model) = camera.calculate_mvp(viewport);
+        let (vp, model) = camera.calculate_mvp(viewport, time_elapsed);
         basic3d_mvp.create_descriptor_set(context, shaders, descriptors, vp, model)?;
        ortho_uniform.create_descriptor_set(
            context, shaders, descriptors, geom_imgui.get_orthographic_projection())?;

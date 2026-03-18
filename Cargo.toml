@@ -37,14 +37,14 @@ codegen-units = 256
 
 # For Rirurin: Uncomment the patches when in active development!
 
-[patch."https://github.com/rirurin/winit"]
-winit = { path = "../winit/winit" }
+# [patch."https://github.com/rirurin/winit"]
+# winit = { path = "../winit/winit" }
 
-[patch."https://github.com/rirurin/imgui-winit-support"]
-imgui-winit-support = { path = "../imgui-winit-support" }
+# [patch."https://github.com/rirurin/imgui-winit-support"]
+# imgui-winit-support = { path = "../imgui-winit-support" }
 
-[patch."https://github.com/rirurin/imgui-rs"]
-imgui = { path = "../imgui-rs/imgui" }
+# [patch."https://github.com/rirurin/imgui-rs"]
+# imgui = { path = "../imgui-rs/imgui" }
 
-[patch."https://github.com/rirurin/riri-imgui-components"]
-riri-inspector-components = { path = "../riri-imgui-components/riri-inspector-components" }
+# [patch."https://github.com/rirurin/riri-imgui-components"]
+# riri-inspector-components = { path = "../riri-imgui-components/riri-inspector-components" }

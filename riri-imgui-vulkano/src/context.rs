@@ -8,7 +8,7 @@ use vulkano::instance::{Instance, InstanceCreateFlags, InstanceCreateInfo};
 use vulkano::memory::allocator::StandardMemoryAllocator;
 use vulkano::swapchain::Surface;
 use vulkano::{Version, VulkanLibrary};
-use vulkano::instance::debug::{DebugUtilsMessageSeverity, DebugUtilsMessageType, DebugUtilsMessenger, DebugUtilsMessengerCallback, DebugUtilsMessengerCallbackData, DebugUtilsMessengerCreateInfo};
+use vulkano::instance::debug::{DebugUtilsMessageSeverity, DebugUtilsMessageType, DebugUtilsMessenger, DebugUtilsMessengerCallback, DebugUtilsMessengerCreateInfo};
 use winit::raw_window_handle::HasDisplayHandle;
 use winit::window::Window;
 use crate::device_select::DeviceSelector;
@@ -22,6 +22,7 @@ pub struct RendererContext {
     logical_device: Arc<Device>,
     queue: Arc<Queue>,
     allocator: Arc<StandardMemoryAllocator>,
+    #[allow(dead_code)]
     debug_messenger: DebugUtilsMessenger
 }
 

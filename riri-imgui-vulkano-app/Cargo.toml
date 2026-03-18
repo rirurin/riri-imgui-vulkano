@@ -10,7 +10,7 @@ edition.workspace = true
 
 [dependencies]
 humantime = "2.3.0"
-gilrs-imgui-support = { path = "../../gilrs-imgui-support" }
+gilrs-imgui-support = { git = "https://github.com/rirurin/gilrs-imgui-support"}
 glam = "0.32"
 imgui = { git = "https://github.com/rirurin/imgui-rs", features = ["docking", "tables-api"] }
 imgui-winit-support = { git = "https://github.com/rirurin/imgui-winit-support" }
