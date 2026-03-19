@@ -57,7 +57,12 @@ impl App {
             last_frame: Instant::now(),
             camera: Camera::new(),
             data3d: Self::get_sample_data(),
-            gamepad: GamepadBuilder::new().set_axis_to_btn(0.5, 0.4).build()?,
+            gamepad: GamepadBuilder::new()
+                .set_axis_to_btn(0.5, 0.4)
+                // Invert the inverse_y setting to account for flipped y axis clip space.
+                // This is not necessary with OpenGL or DirectX
+                .invert_y(true)
+                .build()?,
             time_elapsed: 0.,
             count: 0,
         })

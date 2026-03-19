@@ -55,7 +55,7 @@ fn main() {
     }
 
     for (path_in, path_out) in shaders_in.iter().zip(shaders_out.iter()) {
-        // from shader-compiler example in riri-imgui-vulkano-shadesr
+        // from shader-compiler example in riri-imgui-vulkano-shaders
         let filename = path_in.file_name().unwrap().to_str().unwrap().to_string();
         let parts: Vec<&str> = filename.split(".").collect();
         let shader_type = match parts[1] {

@@ -35,15 +35,15 @@ impl Camera {
         self.pitch += ((ui.io().get_key_analog_value(Key::GamepadRStickUp) * delta) - (ui.io().get_key_analog_value(Key::GamepadRStickDown) * delta)) * 2.;
 
 
-        let adjustment = (ui.io().get_key_analog_value(Key::GamepadL2) * 300.) - (ui.io().get_key_analog_value(Key::GamepadR2) * 90.);
+        let adjustment = (ui.io().get_key_analog_value(Key::GamepadL2) * 10.) - (ui.io().get_key_analog_value(Key::GamepadR2) * 3.);
 
-        let lh = ((ui.io().get_key_analog_value(Key::GamepadLStickRight) * delta) - (ui.io().get_key_analog_value(Key::GamepadLStickLeft) * delta)) * (100. + adjustment);
-        let lv = ((ui.io().get_key_analog_value(Key::GamepadLStickUp) * delta) - (ui.io().get_key_analog_value(Key::GamepadLStickDown) * delta)) * (100. + adjustment);
+        let lh = ((ui.io().get_key_analog_value(Key::GamepadLStickRight) * delta) - (ui.io().get_key_analog_value(Key::GamepadLStickLeft) * delta)) * (5. + adjustment);
+        let lv = ((ui.io().get_key_analog_value(Key::GamepadLStickUp) * delta) - (ui.io().get_key_analog_value(Key::GamepadLStickDown) * delta)) * (5. + adjustment);
 
         let dir = self.eye - self.lookat; // front vector
         let r = Vec3A::Y.cross(dir).normalize_or_zero(); // right unit vector
-        if ui.is_key_down(Key::GamepadL1) { self.eye.y += (100. + adjustment) * delta }
-        if ui.is_key_down(Key::GamepadR1) { self.eye.y -= (100. + adjustment) * delta }
+        if ui.is_key_down(Key::GamepadL1) { self.eye.y += (5. + adjustment) * delta }
+        if ui.is_key_down(Key::GamepadR1) { self.eye.y -= (5. + adjustment) * delta }
         self.eye += lh * r + lv * dir.normalize_or_zero();
         self.lookat = self.eye - Vec3A::new(
             -(self.pan.sin() * self.pitch.cos()),
@@ -59,7 +59,8 @@ impl Camera {
         // View Projection
         let view = Mat4::look_at_rh(self.eye.into(), self.lookat.into(), self.up.into());
         let fovy_rad = self.fovy * std::f32::consts::PI / 180.;
-        let proj = Mat4::perspective_rh(fovy_rad, viewport.extent[0] / viewport.extent[1], self.near_clip, self.far_clip);
+        let mut proj = Mat4::perspective_rh(fovy_rad, viewport.extent[0] / viewport.extent[1], self.near_clip, self.far_clip);
+        proj.y_axis.y *= -1.; // reverse y axis clip space for Vulkan [1, -1]
         let view_projection = proj * view;
         // Model
         let rt = time_elapsed % (std::f32::consts::PI * 2.);
