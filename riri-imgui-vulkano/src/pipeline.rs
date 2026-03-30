@@ -8,7 +8,7 @@ use std::sync::Arc;
 use vulkano::pipeline::graphics::color_blend::{AttachmentBlend, ColorBlendAttachmentState, ColorBlendState};
 use vulkano::pipeline::graphics::input_assembly::InputAssemblyState;
 use vulkano::pipeline::graphics::multisample::MultisampleState;
-use vulkano::pipeline::graphics::rasterization::RasterizationState;
+use vulkano::pipeline::graphics::rasterization::{CullMode, RasterizationState};
 use vulkano::pipeline::graphics::vertex_input::{Vertex, VertexDefinition};
 use vulkano::pipeline::graphics::viewport::{Scissor, Viewport, ViewportState};
 use vulkano::pipeline::graphics::GraphicsPipelineCreateInfo;
@@ -188,7 +188,6 @@ impl<const I: usize> CreateGraphicsPipeline for Basic3dGraphicsPipeline<I> {
             .ok_or(LibError::FailToGetSubBuffer)?;
         let mut dynamic_state = HashSet::default();
         dynamic_state.insert(DynamicState::Viewport);
-        // dynamic_state.insert(DynamicState::Scissor);
         Ok(Self(GraphicsPipeline::new(
             context.logical_device(),
             None,
@@ -202,10 +201,12 @@ impl<const I: usize> CreateGraphicsPipeline for Basic3dGraphicsPipeline<I> {
                 // Set the viewport
                 viewport_state: Some(ViewportState {
                     viewports: [viewport.clone()].into_iter().collect(),
-                    // scissors: [scissor.clone()].into_iter().collect(),
                     ..Default::default()
                 }),
-                rasterization_state: Some(RasterizationState::default()),
+                rasterization_state: Some(RasterizationState {
+                    cull_mode: CullMode::Back,
+                    ..Default::default()
+                }),
                 multisample_state: Some(MultisampleState::default()),
                 color_blend_state: Some(ColorBlendState::with_attachment_states(
                     render_pass.num_color_attachments(),
