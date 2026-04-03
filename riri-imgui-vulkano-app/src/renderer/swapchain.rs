@@ -40,11 +40,10 @@ impl HasSwapchain for AppSwapchain {
 
 impl SwapchainImpl for AppSwapchain {
     fn make_framebuffer<R: HasRenderPass>(&self, image: Arc<Image>, render_pass: &R) -> Result<Arc<Framebuffer>> {
-        let color = ImageView::new_default(image.clone())?;
         Ok(Framebuffer::new(
             render_pass.render_pass(),
             FramebufferCreateInfo {
-                attachments: vec![color, self.depth_stencil.clone()],
+                attachments: vec![ImageView::new_default(image)?, self.depth_stencil.clone()],
                 ..Default::default()
             },
         )?)

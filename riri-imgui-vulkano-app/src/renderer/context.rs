@@ -12,7 +12,7 @@ use riri_imgui_vulkano::geometry::ImguiGeometry;
 use riri_imgui_vulkano::viewport::{ScissorBuilder, ViewportBuilder};
 use riri_imgui_vulkano::pipeline::{ImguiGraphicsPipeline, CreateGraphicsPipeline, Basic3dGraphicsPipeline};
 use riri_imgui_vulkano::render_pass::{LibRenderPass, RenderPassBuilder};
-use riri_imgui_vulkano::resources::{HasPhysicalDevice, HasSwapchain};
+use riri_imgui_vulkano::resources::{HasCommandBufferAllocator, HasPhysicalDevice, HasSwapchain};
 use riri_imgui_vulkano::shaders::{LibShaderRegistry, ShaderRegistry};
 use riri_imgui_vulkano::swapchain::SwapchainImpl;
 use riri_imgui_vulkano::vertex::AppDrawData3D;
@@ -73,10 +73,10 @@ impl VulkanContext {
         let gpu_commands = AppGpuCommands::new(
             &context, &viewport, &swapchain, &pipeline,
             ImguiGeometry::default(), &AppDrawData3D::default(),
-            clear_color.clone(), &shaders, &mut descriptors,
+            clear_color.clone(), &mut descriptors,
             &mut ortho_builder, &DEFAULT_CAMERA, &mut basic3d_mvp, 0.)?;
         ImguiFontBuilder::build(
-            &context, &shaders, &mut descriptors,
+            &context, &pipeline.imgui, &mut descriptors,
             &gpu_commands.allocator, imgui.fonts())?;
 
         // Completed
@@ -149,9 +149,10 @@ impl VulkanContext {
             draw_data.framebuffer_scale[1] * draw_data.display_size[1],
         );
         self.viewport = ViewportBuilder::from_extent(framebuffer_size);
+        self.gpu_commands.buffers.clear();
         self.gpu_commands = AppGpuCommands::new(
             &self.context, &self.viewport, &self.swapchain, &self.pipeline,
-            imgui_geometry, draw3d, self.clear_color.clone(), &self.shaders,
+            imgui_geometry, draw3d, self.clear_color.clone(),
             &mut self.descriptors, &mut self.ortho_builder, camera,
             &mut self.basic3d_mvp, time_elapsed)?;
         Ok(())

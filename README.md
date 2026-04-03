@@ -12,6 +12,8 @@ A complete example of an app built on top of `riri-imgui-vulkano`, featuring a r
 
 ![A preview of the app, with the imgui demo window and a spinning cube.](assets/app_preview.gif)
 
+To try out the sample app, run `cargo run`. Note that this uses [shaderc](https://crates.io/crates/shaderc), so it'll require installing Ninja on Windows.
+
 ### riri-imgui-vulkano
 
 A crate containing a collection of (mostly) reusable Vulkan and Imgui objects, with the aim of simplifying Vulkan's initialization and rendering for app developers and to provide customizability for these objects with traits.

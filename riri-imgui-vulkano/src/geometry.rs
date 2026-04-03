@@ -54,19 +54,7 @@ impl GeometryBufferBuilder {
     where C: HasStandardMemoryAllocator,
           T: BufferContents {
         if data.len() == 0 { return Ok(None) }
-        Ok(Some(Buffer::from_iter(
-            context.allocator(),
-            BufferCreateInfo {
-                usage,
-                ..Default::default()
-            },
-            AllocationCreateInfo {
-                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
-                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-                ..Default::default()
-            },
-            data
-        )?))
+        Self::from_iter_generic(data, context, usage)
     }
 
     pub(crate) fn from_iter_generic<C, T, I>(

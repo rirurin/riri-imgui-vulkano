@@ -1,10 +1,8 @@
 use crate::commands::{CopyBufferToImage, GpuCommandAllocator, GpuCommandBuilder, GpuCommandSet, GpuCommandUsageOnce};
 use crate::error::{LibError, Result};
 use crate::geometry::GeometryBufferBuilder;
-use crate::pipeline::PipelineLayoutBuilder;
-use crate::resources::{HasLogicalDevice, HasQueue, HasStandardDescriptorSetAllocator, HasStandardMemoryAllocator};
-use crate::shaders::{AppShader, ShaderRegistry};
-use crate::try_get_vertex_pixel;
+use crate::resources::{HasLogicalDevice, HasPipelineLayout, HasQueue, HasStandardDescriptorSetAllocator, HasStandardMemoryAllocator};
+use crate::shaders::ShaderRegistry;
 use glam::Mat4;
 use imgui::TextureId;
 use std::collections::HashMap;
@@ -22,19 +20,21 @@ use vulkano::sync::GpuFuture;
 
 pub trait DescriptorSetRegistry {
     /// Tries to get the descriptor set that matches the given key.
-    fn get(&self, key: TextureId) -> Result<Weak<DescriptorSet>>;
+    fn get_descriptor(&self, key: TextureId) -> Result<Weak<DescriptorSet>>;
     /// Removes the descriptor set from the registry.
-    fn remove(&mut self, key: TextureId);
-    /// Creates a descriptor set using a pipeline shader stage
-    fn from_pipeline_layout<T0>(
+    fn remove_descriptor(&mut self, key: TextureId);
+    /// Creates a descriptor set from a graphics pipeline
+    fn from_graphics_pipeline<P>(
         &mut self,
-        context: &T0,
-        shaders: (&AppShader, &AppShader),
+        pipeline: &P,
         set: usize,
         descriptor_writes: impl IntoIterator<Item = WriteDescriptorSet>,
         descriptor_copies: impl IntoIterator<Item = CopyDescriptorSet>
     ) -> Result<TextureId>
-    where T0: HasLogicalDevice;
+    where P: HasPipelineLayout;
+
+    /// Removes all descriptor sets from the registry
+    fn clear_descriptors(&mut self);
 }
 
 #[derive(Debug)]
@@ -54,26 +54,28 @@ impl LibDescriptorSets {
 }
 
 impl DescriptorSetRegistry for LibDescriptorSets {
-    fn get(&self, key: TextureId) -> Result<Weak<DescriptorSet>> {
+    fn get_descriptor(&self, key: TextureId) -> Result<Weak<DescriptorSet>> {
         self.descriptor_sets.get(&key)
             .map(|v| Arc::downgrade(v))
             .ok_or(Box::new(LibError::MissingDescriptorSet(key)))
     }
 
-    fn remove(&mut self, key: TextureId) {
-        let _ = self.descriptor_sets.remove(&key);
+    fn remove_descriptor(&mut self, key: TextureId) {
+        let old = self.descriptor_sets.remove(&key);
+        if let Some(old) = old {
+            drop(old);
+        }
     }
 
-    fn from_pipeline_layout<T0>(
+    fn from_graphics_pipeline<P>(
         &mut self,
-        context: &T0,
-        shaders: (&AppShader, &AppShader),
+        pipeline: &P,
         set: usize,
         descriptor_writes: impl IntoIterator<Item = WriteDescriptorSet>,
         descriptor_copies: impl IntoIterator<Item = CopyDescriptorSet>
     ) -> Result<TextureId>
-    where T0: HasLogicalDevice {
-        let layout = PipelineLayoutBuilder::from_vertex_pixel(shaders).build(context)?;
+    where P: HasPipelineLayout {
+        let layout = pipeline.layout();
         let descriptor_set_layout = layout.set_layouts()
             .get(set).ok_or(LibError::FailToGetDescriptorSetLayout(layout.clone()))?;
         let descriptor_set = DescriptorSet::new(
@@ -83,8 +85,12 @@ impl DescriptorSetRegistry for LibDescriptorSets {
             descriptor_copies
         )?;
         let key = TextureId::new(&raw const *descriptor_set.as_ref() as usize);
-        self.descriptor_sets.insert(key, descriptor_set.clone());
+        self.descriptor_sets.insert(key, descriptor_set);
         Ok(key)
+    }
+
+    fn clear_descriptors(&mut self) {
+        self.descriptor_sets.clear();
     }
 }
 
@@ -141,16 +147,16 @@ impl ImguiFontBuilder {
 
     pub fn build<T0, T1>(
         context: &T0,
-        shaders: &T1,
+        pipeline: &T1,
         descriptors: &mut LibDescriptorSets,
         command_allocator: &GpuCommandAllocator,
         fonts: &mut imgui::FontAtlas
     ) -> Result<()>
     where T0: HasLogicalDevice + HasStandardMemoryAllocator + HasQueue,
-          T1: ShaderRegistry {
+          T1: HasPipelineLayout {
         // remove the old font texture
         if fonts.tex_id.id() as *const u8 != std::ptr::null() {
-            descriptors.remove(fonts.tex_id);
+            descriptors.remove_descriptor(fonts.tex_id);
         }
         // ImGui_ImplVulkan_CreateFontSampler
         let font_sampler = Sampler::new(
@@ -163,8 +169,8 @@ impl ImguiFontBuilder {
         let font_image = Self::build_font_image(context, [fa_tex.width, fa_tex.height])?;
         let font_image_view = Self::build_font_image_view(font_image.clone())?;
         // layout(set=0, binding=0) uniform sampler2D sTexture;
-        let font_id = descriptors.from_pipeline_layout(
-            context, try_get_vertex_pixel!(shaders, "imgui")?, 0,
+        let font_id = descriptors.from_graphics_pipeline(
+            pipeline, 0,
             [WriteDescriptorSet::image_view_sampler(
                 0, font_image_view.clone(), font_sampler.clone())],
             []
@@ -197,21 +203,19 @@ impl ImguiOrthoUniform {
     pub fn create_descriptor_set<T0, T1>(
         &mut self,
         context: &T0,
-        shaders: &T1,
+        pipeline: &T1,
         descriptors: &mut LibDescriptorSets,
         projection: Mat4,
     ) -> Result<()>
     where T0: HasLogicalDevice + HasStandardMemoryAllocator,
-          T1: ShaderRegistry {
+          T1: HasPipelineLayout {
         if self.0.id() as *const u8 != std::ptr::null() {
-            descriptors.remove(self.0);
+            descriptors.remove_descriptor(self.0);
         }
         let buffer = GeometryBufferBuilder::from_iter_generic(
             projection.to_cols_array(), context, BufferUsage::UNIFORM_BUFFER)?.unwrap();
-        self.0 = descriptors.from_pipeline_layout(
-            context, try_get_vertex_pixel!(shaders, "imgui")?, 1,
-            [WriteDescriptorSet::buffer(0, buffer.clone())],
-            []
+        self.0 = descriptors.from_graphics_pipeline(
+            pipeline, 1, [WriteDescriptorSet::buffer(0, buffer.clone())], []
         )?;
         Ok(())
     }
@@ -231,15 +235,15 @@ impl Basic3dMVPUniform {
     pub fn create_descriptor_set<T0, T1>(
         &mut self,
         context: &T0,
-        shaders: &T1,
+        pipeline: &T1,
         descriptors: &mut LibDescriptorSets,
         view_projection: Mat4,
         model: Mat4
     ) -> Result<()>
     where T0: HasLogicalDevice + HasStandardMemoryAllocator,
-          T1: ShaderRegistry {
+          T1: HasPipelineLayout {
         if self.0.id() as *const u8 != std::ptr::null() {
-            descriptors.remove(self.0);
+            descriptors.remove_descriptor(self.0);
         }
         let camera_mvp = CameraMVP {
             view_projection: view_projection.to_cols_array(),
@@ -247,10 +251,8 @@ impl Basic3dMVPUniform {
         };
         let buffer = GeometryBufferBuilder::from_data(
             camera_mvp, context, BufferUsage::UNIFORM_BUFFER)?.unwrap();
-        self.0 = descriptors.from_pipeline_layout(
-            context, try_get_vertex_pixel!(shaders, "basic3d")?, 1,
-            [WriteDescriptorSet::buffer(0, buffer.clone())],
-            []
+        self.0 = descriptors.from_graphics_pipeline(
+            pipeline, 1, [WriteDescriptorSet::buffer(0, buffer.clone())], []
         )?;
         Ok(())
     }

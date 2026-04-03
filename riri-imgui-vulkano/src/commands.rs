@@ -312,7 +312,7 @@ impl<'a> GpuCommandSet for DrawImgui<'a> {
         builder.bind_pipeline_graphics(self.pipeline.clone())?;
         if let Some(draw_data) = &self.geometry.draw_data {
             let viewport_extent = Vec2::from(self.viewport.extent);
-            let ortho = self.descriptors.get(self.ortho)?.clone().upgrade().unwrap();
+            let ortho = self.descriptors.get_descriptor(self.ortho)?.clone().upgrade().unwrap();
             builder
                 .set_viewport(0, [self.viewport.clone()].into_iter().collect())?
                 .bind_descriptor_sets(
@@ -364,7 +364,7 @@ impl<'a> GpuCommandSet for DrawImgui<'a> {
                             // Bind DescriptorSet with font or user texture
                             if current_texture_id.map_or(
                                 true, |id| texture_id != id) {
-                                if let Ok(desc) = self.descriptors.get(texture_id) {
+                                if let Ok(desc) = self.descriptors.get_descriptor(texture_id) {
                                     builder
                                         // layout(set=0, binding=0) uniform sampler2D sTexture;
                                         .bind_descriptor_sets(
@@ -425,7 +425,7 @@ impl<'a> DrawBasic3d<'a> {
 
 impl<'a> GpuCommandSet for DrawBasic3d<'a> {
     fn build(&self, builder: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>) -> Result<()> {
-        let mvp = self.descriptors.get(self.mvp)?.clone().upgrade().unwrap();
+        let mvp = self.descriptors.get_descriptor(self.mvp)?.clone().upgrade().unwrap();
         builder
             .bind_pipeline_graphics(self.pipeline.clone())?
             .set_viewport(0, [self.viewport.clone()].into_iter().collect())?

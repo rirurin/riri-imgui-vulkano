@@ -234,6 +234,7 @@ impl ApplicationHandler for App {
                 if renderer.present().unwrap() {
                     renderer.refresh(window.clone()).unwrap();
                 }
+                // renderer.refresh(window.clone()).unwrap();
             },
             WindowEvent::SurfaceResized(_) => {
                 let io = imgui.io_mut();

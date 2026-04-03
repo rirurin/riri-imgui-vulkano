@@ -6,7 +6,6 @@ use riri_imgui_vulkano::commands::{DrawBasic3d, DrawImgui, EndRenderPass, GpuCom
 use riri_imgui_vulkano::descriptors::{Basic3dMVPUniform, ImguiOrthoUniform, LibDescriptorSets};
 use riri_imgui_vulkano::geometry::{BasicDrawGeometry, ImguiGeometry};
 use riri_imgui_vulkano::resources::{HasAutoCommandBuffers, HasGraphicsPipeline, HasLogicalDevice, HasQueue, HasStandardMemoryAllocator};
-use riri_imgui_vulkano::shaders::LibShaderRegistry;
 use riri_imgui_vulkano::vertex::AppDrawData3D;
 use std::sync::Arc;
 use vulkano::command_buffer::PrimaryAutoCommandBuffer;
@@ -28,7 +27,6 @@ impl AppGpuCommands {
         geom_imgui: ImguiGeometry,
         draw3d: &AppDrawData3D,
         clear_color: ClearValue,
-        shaders: &LibShaderRegistry,
         descriptors: &mut LibDescriptorSets,
         ortho_uniform: &mut ImguiOrthoUniform,
         camera: &Camera,
@@ -38,9 +36,10 @@ impl AppGpuCommands {
     where C: HasLogicalDevice + HasStandardMemoryAllocator + HasQueue {
         let allocator = GpuCommandAllocator::new(context);
         let (vp, model) = camera.calculate_mvp(viewport, time_elapsed);
-        basic3d_mvp.create_descriptor_set(context, shaders, descriptors, vp, model)?;
-       ortho_uniform.create_descriptor_set(
-           context, shaders, descriptors, geom_imgui.get_orthographic_projection())?;
+        basic3d_mvp.create_descriptor_set(
+            context, &pipelines.basic3d, descriptors, vp, model)?;
+        ortho_uniform.create_descriptor_set(
+            context, &pipelines.imgui, descriptors, geom_imgui.get_orthographic_projection())?;
         let geom_draw3d = BasicDrawGeometry::new(context, draw3d)?;
         let buffers = swapchain.framebuffers.iter().map(|framebuffer| {
             let mut builder: GpuCommandBuilder<_, GpuCommandUsageOnce>

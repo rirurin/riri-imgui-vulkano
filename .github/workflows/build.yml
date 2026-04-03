@@ -19,12 +19,7 @@ jobs:
     strategy:
       matrix:
         platform: [
-          { 
-            # Ubuntu
-            runner-name: "ubuntu-latest",
-            rust-target: "x86_64-unknown-linux-gnu",
-            release-name: "Linux Release",
-          },
+          # Test: Remove Linux target, seems that this CI script freezes the Github Actions runner (lol??)
           { 
             # Windows
             runner-name: "windows-latest",
