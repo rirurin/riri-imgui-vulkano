@@ -35,6 +35,11 @@ lto = false
 incremental = true
 codegen-units = 256
 
+# Default profile when using "cargo run".
+# Use codegen optimization since opt-level = 0 causes stack overflow on some machines
+[profile.dev]
+opt-level = 1
+
 # For Rirurin: Uncomment the patches when in active development!
 
 # [patch."https://github.com/rirurin/winit"]

@@ -150,11 +150,17 @@ impl IconLookupWin32 {
 
 impl ApplicationHandler for App {
     fn can_create_surfaces(&mut self, event_loop: &dyn ActiveEventLoop) {
-        let icon = if cfg!(target_os = "windows") {
-            Some(IconLookupWin32::get().unwrap())
-        } else {
-            None
-        };
+        #[cfg(target_os = "windows")]
+        let icon = Some(IconLookupWin32::get().unwrap());
+        /*
+        #[cfg(target_os = "linux")]
+        let icon: Option<Icon> = None;
+        // macOS etc.
+        #[cfg(all(not(target_os = "windows"), not(target_os = "linux")))]
+        let icon: Option<Icon> = None;
+        */
+        #[cfg(not(target_os = "windows"))]
+        let icon: Option<Icon> = None;
         let attr = WindowAttributes::default()
             .with_visible(false)
             .with_title(self.get_name())
