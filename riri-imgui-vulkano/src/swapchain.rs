@@ -1,10 +1,11 @@
 use crate::error::{LibError, Result};
 use crate::resources::{HasAutoCommandBuffers, HasLogicalDevice, HasPhysicalDevice, HasQueue, HasRenderPass, HasStandardMemoryAllocator, HasSurface, HasSwapchain};
 use glam::UVec2;
+use vulkano::format::Format;
 use std::fmt::{Debug, Formatter};
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
-use vulkano::command_buffer::CommandBufferExecFuture;
+use vulkano::command_buffer::{CommandBufferExecFuture, PrimaryAutoCommandBuffer};
 use vulkano::image::view::ImageView;
 use vulkano::image::{Image, ImageUsage};
 use vulkano::render_pass::{Framebuffer, FramebufferCreateInfo};
@@ -16,12 +17,26 @@ use winit::window::Window;
 
 pub type FenceFuture = PresentFuture<CommandBufferExecFuture<JoinFuture<Box<dyn GpuFuture>, SwapchainAcquireFuture>>>;
 
+pub struct AcquireSwapchainImageResult {
+    pub image_index: usize,
+    pub suboptimal: bool,
+    pub future: SwapchainAcquireFuture
+}
+
+impl AcquireSwapchainImageResult {
+    pub(crate) fn new(image_index: usize, suboptimal: bool, acquire_future: SwapchainAcquireFuture) -> Self {
+        Self { image_index, suboptimal, future: acquire_future }
+    }
+}
+
 pub struct BaseSwapchain {
     pub swapchain: Arc<Swapchain>,
     pub images: Vec<Arc<Image>>,
     pub framebuffers: Vec<Arc<Framebuffer>>,
-    pub fences: Vec<Option<Arc<FenceSignalFuture<FenceFuture>>>>,
-    pub previous_fence: usize,
+    // pub fences: Vec<Option<Arc<FenceSignalFuture<FenceFuture>>>>,
+    // pub previous_fence: usize,
+    pub previous_frame_end: Option<Box<dyn GpuFuture>>,
+    pub recreate: bool
 }
 
 impl HasSwapchain for BaseSwapchain {
@@ -43,8 +58,13 @@ impl BaseSwapchain {
         window: Arc<Box<dyn Window>>
     ) -> Result<(Arc<Swapchain>, Vec<Arc<Image>>)>
     where T: HasPhysicalDevice + HasSurface + HasLogicalDevice + HasStandardMemoryAllocator {
-        let image_format = context.physical_device().surface_formats(
-            context.surface().as_ref(), Default::default())?[0].0;
+        // TODO: Prefer selecting UNORM, SRGB requires shader gamma correction
+        // for (format, colorspace) in context.physical_device().surface_formats(context.surface().as_ref(), Default::default())? {
+        //     println!("format {:?}, colorspace {:?}", format, colorspace);
+        // }
+        // let image_format = context.physical_device().surface_formats(
+        //     context.surface().as_ref(), Default::default())?[0].0;
+        let image_format = Format::B8G8R8A8_UNORM;
         let capabilities = context.physical_device().surface_capabilities(
             context.surface().as_ref(), Default::default())?;
         let dimensions = window.surface_size();
@@ -54,7 +74,7 @@ impl BaseSwapchain {
             context.logical_device(),
             context.surface(),
             SwapchainCreateInfo {
-                min_image_count: capabilities.min_image_count,
+                min_image_count: capabilities.min_image_count.max(2),
                 image_format,
                 image_extent: dimensions.into(),
                 image_usage: ImageUsage::COLOR_ATTACHMENT,
@@ -64,46 +84,43 @@ impl BaseSwapchain {
         )?)
     }
 
-    fn present_inner<
-        T0: HasLogicalDevice + HasQueue,
-        T1: HasAutoCommandBuffers
-    >(&mut self, device: &T0, buffers: &T1) -> Result<bool> {
-        let (image_index, mut recreate_swapchain, future) =
-            match vulkano::swapchain::acquire_next_image(self.swapchain.clone(), None) {
-                Ok(r) => r,
-                Err(Validated::Error(VulkanError::OutOfDate)) => return Ok(true),
-                Err(e) => panic!("Couldn't acquire image: {}", e)
-            };
-        let image_index = image_index as usize;
-        if let Some(image_fence) = &self.fences[image_index] {
-            image_fence.wait(None)?; // wait for GPU to finish
+    pub fn acquire_swapchain_image(&mut self) -> Option<AcquireSwapchainImageResult> {
+        self.previous_frame_end.as_mut().unwrap().cleanup_finished();
+        match vulkano::swapchain::acquire_next_image(self.swapchain.clone(), None) {
+            Ok(r) => Some(AcquireSwapchainImageResult::new(r.0 as usize, r.1, r.2)),
+            Err(Validated::Error(VulkanError::OutOfDate)) => None,
+            Err(e) => panic!("Couldn't acquire image: {}", e)
         }
-        let prev_fut = match self.fences[self.previous_fence].clone() {
-            None => { // Create a NowFuture
-                let mut now = sync::now(device.logical_device());
-                now.cleanup_finished();
-                now.boxed()
-            }, // Use the existing FenceSignalFuture
-            Some(fence) => fence.boxed()
-        };
-        let execution = prev_fut
-            .join(future)
-            .then_execute(device.queue(), buffers.buffer(image_index).ok_or(LibError::NoCommandBufferAtIndex(image_index))?)?
-            .then_swapchain_present(device.queue(), SwapchainPresentInfo::swapchain_image_index(self.swapchain.clone(), image_index as _))
+    }
+
+    pub fn present<T>(&mut self, context: &T, buffer: Arc<PrimaryAutoCommandBuffer>, acquire: AcquireSwapchainImageResult) 
+    where T: HasQueue + HasLogicalDevice {
+        let future = self 
+            .previous_frame_end
+            .take()
+            .unwrap()
+            .join(acquire.future)
+            .then_execute(context.queue(), buffer)
+            .unwrap()
+            .then_swapchain_present(
+                context.queue(),
+                SwapchainPresentInfo::swapchain_image_index(self.swapchain.clone(), acquire.image_index as u32),
+            )
             .then_signal_fence_and_flush();
-        self.fences[image_index] = match execution.map_err(Validated::unwrap) {
-            Ok(fut) => Some(Arc::new(fut)),
-            Err(VulkanError::OutOfDate) => {
-                recreate_swapchain = true;
-                None
-            },
-            Err(e) => {
-                println!("Failed to flush future: {}", e);
-                None
+
+        match future.map_err(Validated::unwrap) {
+            Ok(future) => {
+                self.previous_frame_end = Some(future.boxed());
             }
-        };
-        self.previous_fence = image_index;
-        Ok(recreate_swapchain)
+            Err(VulkanError::OutOfDate) => {
+                self.recreate = true;
+                self.previous_frame_end = Some(sync::now(context.logical_device()).boxed());
+            }
+            Err(e) => {
+                println!("failed to flush future: {e}");
+                self.previous_frame_end = Some(sync::now(context.logical_device()).boxed());
+            }
+        }
     }
 
     pub fn new<T>(context: &T, window: Arc<Box<dyn Window>>) -> Result<Self>
@@ -111,10 +128,12 @@ impl BaseSwapchain {
         let (swapchain, images)
             = BaseSwapchain::create_swapchain_and_images(context, window.clone())?;
         let framebuffers = vec![];
-        let fences = vec![None; images.len()];
-        let previous_fence = 0;
+        // let fences = vec![None; images.len()];
+        // let previous_fence = 0;
         Ok(Self {
-            swapchain, images, framebuffers, fences, previous_fence
+            swapchain, images, framebuffers, // fences, previous_fence
+            previous_frame_end: Some(sync::now(context.logical_device()).boxed()),
+            recreate: false
         })
     }
 }
@@ -126,12 +145,6 @@ pub trait SwapchainImpl: Deref<Target = BaseSwapchain> + DerefMut<Target = BaseS
             .map(|image| self.make_framebuffer(image.clone(), render_pass))
             .collect::<Result<Vec<Arc<Framebuffer>>>>()?;
         Ok(())
-    }
-    fn present<
-        T0: HasLogicalDevice + HasQueue,
-        T1: HasAutoCommandBuffers
-    >(&mut self, device: &T0, buffers: &T1) -> Result<bool> {
-        self.present_inner(device, buffers)
     }
     fn refresh<
         T0: HasStandardMemoryAllocator,
@@ -179,6 +192,7 @@ impl SwapchainImpl for LibSwapchain {
         T0: HasStandardMemoryAllocator,
         T1: HasRenderPass
     >(&mut self, _: &T0, render_pass: &T1, extent: UVec2) -> Result<()> {
+        self.recreate = false;
         (self.swapchain, self.images) = self.swapchain.recreate(SwapchainCreateInfo {
             image_extent: extent.to_array(), ..self.swapchain.create_info()
         })?;

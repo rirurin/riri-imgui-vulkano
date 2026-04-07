@@ -5,12 +5,15 @@ use crate::result::Result;
 use gilrs_imgui_support::debug::GamepadVisualDebug;
 use gilrs_imgui_support::state::{GamepadBuilder, GamepadState};
 use glam::{U8Vec4, Vec2, Vec3};
+use image::ImageFormat;
 use imgui::{BackendFlags, ConfigFlags, Context as ImContext, FontGlyphRanges, FontId, ImColor32};
 use imgui_winit_support::{HiDpiMode, WinitPlatform};
 use riri_imgui_vulkano::context::RendererContext;
 use riri_imgui_vulkano::vertex::{AppDrawData3D, AppVertex3D};
 use riri_inspector_components::clipboard::ClipboardSupport;
 use std::collections::HashMap;
+use std::fs::File;
+use std::io::BufReader;
 use std::sync::Arc;
 use std::time::Instant;
 use vulkano::format::ClearValue;
@@ -18,7 +21,7 @@ use winit::application::ApplicationHandler;
 use winit::dpi::{PhysicalPosition, PhysicalSize, Position, Size};
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
-use winit::icon::Icon;
+use winit::icon::RgbaIcon;
 #[cfg(target_os = "windows")]
 use winit::platform::windows::WinIcon;
 use winit::window::{Window, WindowAttributes, WindowId};
@@ -139,21 +142,16 @@ impl App {
     }
 }
 
-#[cfg(target_os = "windows")]
-struct IconLookupWin32;
-#[cfg(target_os = "windows")]
-impl IconLookupWin32 {
-    fn get() -> Result<Icon> {
-        Ok(WinIcon::from_resource(0x65, None)?.into())
-    }
-}
-
 impl ApplicationHandler for App {
     fn can_create_surfaces(&mut self, event_loop: &dyn ActiveEventLoop) {
-        let icon = if cfg!(target_os = "windows") {
-            Some(IconLookupWin32::get().unwrap())
-        } else {
-            None
+        #[cfg(target_os = "windows")]
+        let icon = Some(WinIcon::from_resource(0x65, None)?.into());
+        #[cfg(not(target_os = "windows"))]
+        let icon = {
+            let icon_path = std::env::current_exe().unwrap().parent().unwrap().join("appicon.png");
+            let app_icon = image::ImageReader::with_format(BufReader::new(File::open(icon_path).unwrap()), ImageFormat::Png);
+            let app_icon= app_icon.decode().unwrap();
+            Some(RgbaIcon::new(app_icon.as_rgba8().unwrap().to_vec(), app_icon.width(), app_icon.height()).unwrap().into())
         };
         let attr = WindowAttributes::default()
             .with_visible(false)
@@ -231,10 +229,12 @@ impl ApplicationHandler for App {
                 }
                 renderer.render(
                     draw_data, &self.data3d, &self.camera, self.time_elapsed).unwrap();
+                /*
                 if renderer.present().unwrap() {
                     renderer.refresh(window.clone()).unwrap();
                 }
-                // renderer.refresh(window.clone()).unwrap();
+                */
+                renderer.refresh(window.clone()).unwrap();
             },
             WindowEvent::SurfaceResized(_) => {
                 let io = imgui.io_mut();

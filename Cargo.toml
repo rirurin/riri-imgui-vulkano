@@ -35,6 +35,9 @@ lto = false
 incremental = true
 codegen-units = 256
 
+[profile.dev]
+opt-level = 1
+
 # For Rirurin: Uncomment the patches when in active development!
 
 # [patch."https://github.com/rirurin/winit"]

@@ -7,22 +7,21 @@ use riri_imgui_vulkano::descriptors::{Basic3dMVPUniform, ImguiOrthoUniform, LibD
 use riri_imgui_vulkano::geometry::{BasicDrawGeometry, ImguiGeometry};
 use riri_imgui_vulkano::resources::{HasAutoCommandBuffers, HasGraphicsPipeline, HasLogicalDevice, HasQueue, HasStandardMemoryAllocator};
 use riri_imgui_vulkano::vertex::AppDrawData3D;
+use vulkano::render_pass::Framebuffer;
 use std::sync::Arc;
 use vulkano::command_buffer::PrimaryAutoCommandBuffer;
 use vulkano::format::ClearValue;
 use vulkano::pipeline::graphics::viewport::Viewport;
 
 #[derive(Debug)]
-pub struct AppGpuCommands {
-    pub(crate) allocator: GpuCommandAllocator,
-    pub(crate) buffers: Vec<Arc<PrimaryAutoCommandBuffer>>,
-}
+pub struct AppGpuCommands;
 
 impl AppGpuCommands {
-    pub fn new<C>(
+    pub fn create_command_buffer<C>(
         context: &C,
         viewport: &Viewport,
-        swapchain: &AppSwapchain,
+        framebuffer: Arc<Framebuffer>,
+        // swapchain: &AppSwapchain,
         pipelines: &AppPipeline,
         geom_imgui: ImguiGeometry,
         draw3d: &AppDrawData3D,
@@ -32,7 +31,7 @@ impl AppGpuCommands {
         camera: &Camera,
         basic3d_mvp: &mut Basic3dMVPUniform,
         time_elapsed: f32,
-    ) -> Result<Self>
+    ) -> Result<Arc<PrimaryAutoCommandBuffer>>
     where C: HasLogicalDevice + HasStandardMemoryAllocator + HasQueue {
         let allocator = GpuCommandAllocator::new(context);
         let (vp, model) = camera.calculate_mvp(viewport, time_elapsed);
@@ -41,35 +40,26 @@ impl AppGpuCommands {
         ortho_uniform.create_descriptor_set(
             context, &pipelines.imgui, descriptors, geom_imgui.get_orthographic_projection())?;
         let geom_draw3d = BasicDrawGeometry::new(context, draw3d)?;
-        let buffers = swapchain.framebuffers.iter().map(|framebuffer| {
-            let mut builder: GpuCommandBuilder<_, GpuCommandUsageOnce>
-                = GpuCommandBuilder::new(&allocator, context)?;
-            let clear_values = vec![Some(clear_color), Some(ClearValue::Depth(1.))];
-            StartRenderPass::new(framebuffer.clone(), clear_values).build(&mut builder)?;
-            DrawBasic3d::new(
-                pipelines.basic3d.graphics_pipeline(),
-                &geom_draw3d,
-                viewport.clone(),
-                descriptors,
-                basic3d_mvp.get()
-            )?.build(&mut builder)?;
-            NextSubpass::new().build(&mut builder)?;
-            DrawImgui::new(
-                pipelines.imgui.graphics_pipeline(),
-                &geom_imgui,
-                viewport.clone(),
-                descriptors,
-                ortho_uniform.get()
-            )?.build(&mut builder)?;
-            EndRenderPass::new().build(&mut builder)?;
-            Ok(builder.build()?)
-        }).collect::<Result<Vec<Arc<PrimaryAutoCommandBuffer>>>>()?;
-        Ok(Self { allocator, buffers })
-    }
-}
-
-impl HasAutoCommandBuffers for AppGpuCommands {
-    fn buffer(&self, index: usize) -> Option<Arc<PrimaryAutoCommandBuffer>> {
-        self.buffers.get(index).map(|v| v.clone())
+        let mut builder: GpuCommandBuilder<_, GpuCommandUsageOnce>
+            = GpuCommandBuilder::new(&allocator, context)?;
+        let clear_values = vec![Some(clear_color), Some(ClearValue::Depth(1.))];
+        StartRenderPass::new(framebuffer.clone(), clear_values).build(&mut builder)?;
+        DrawBasic3d::new(
+            pipelines.basic3d.graphics_pipeline(),
+            &geom_draw3d,
+            viewport.clone(),
+            descriptors,
+            basic3d_mvp.get()
+        )?.build(&mut builder)?;
+        NextSubpass::new().build(&mut builder)?;
+        DrawImgui::new(
+            pipelines.imgui.graphics_pipeline(),
+            &geom_imgui,
+            viewport.clone(),
+            descriptors,
+            ortho_uniform.get()
+        )?.build(&mut builder)?;
+        EndRenderPass::new().build(&mut builder)?;
+        Ok(builder.build()?)
     }
 }

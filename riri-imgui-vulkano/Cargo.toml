@@ -14,7 +14,7 @@ imgui = { git = "https://github.com/rirurin/imgui-rs", features = ["docking", "t
 imgui-winit-support = { git = "https://github.com/rirurin/imgui-winit-support" }
 riri-imgui-vulkano-shaders = { path = "../riri-imgui-vulkano-shaders" }
 riri-mod-tools-proc = { git = "https://github.com/rirurin/riri-mod-tools" }
-riri-mod-tools-rt = { git = "https://github.com/rirurin/riri-mod-tools", features = ["detailed-logs"] }
+riri-mod-tools-rt = { git = "https://github.com/rirurin/riri-mod-tools", default-features = false, features = ["detailed-logs"] }
 shaderc = "0.10.1"
 vulkano = "0.35"
 winit = { git = "https://github.com/rirurin/winit" }

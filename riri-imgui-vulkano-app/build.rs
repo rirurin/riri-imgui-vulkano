@@ -5,12 +5,15 @@ use shaderc::{ShaderKind, SourceLanguage};
 use winresource::WindowsResource;
 use riri_imgui_vulkano_shaders::AppCompiler;
 
-#[cfg(target_os = "windows")]
 fn get_appicon<P>(base: P, icon_dim: u32) -> PathBuf
 where P: AsRef<Path> {
+    #[cfg(target_os = "windows")]
+    let target_file = format!("appicon_win32_{}.ico", icon_dim);
+    #[cfg(not(target_os = "windows"))]
+    let target_file = format!("appicon_x11_{}.png", icon_dim);
     base.as_ref()
         .join("data")
-        .join(format!("appicon_{}.ico", icon_dim))
+        .join(target_file)
 }
 
 fn get_project_root<P>(base: P) -> PathBuf
@@ -92,10 +95,10 @@ fn main() {
     }
     // Setup Windows app info
     let cargo_info = mod_package::CargoInfo::new_with_resolver(base.as_path(), get_project_root).unwrap();
+    let appicon = get_appicon(base.as_path(), 256);
+    println!("cargo::rerun-if-changed={}", appicon.to_str().unwrap());
     #[cfg(target_os = "windows")]
     {
-        let appicon = get_appicon(base.as_path(), 256);
-        println!("cargo::rerun-if-changed={}", appicon.to_str().unwrap());
         let mut win_res = WindowsResource::new();
         let version = cargo_info.get_package_string_required("version").unwrap();
         win_res.set("FileVersion", version);
@@ -110,6 +113,11 @@ fn main() {
         win_res.set_language(0x409);
         win_res.set_icon_with_id(appicon.to_str().unwrap(), "101");
         win_res.compile().unwrap();
+    }
+    // Setup Linux app info
+    #[cfg(target_os = "linux")]
+    {
+        std::fs::copy(appicon, out_dir.join("appicon.png")).unwrap();
     }
     // Get version info
     git_version::create_version_file(&base, cargo_info.get_package_string_required("version").unwrap());

@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::time::Instant;
 use glam::{UVec2, Vec2};
 use imgui::DrawData;
+use riri_imgui_vulkano::commands::GpuCommandAllocator;
 use riri_mod_tools_rt::logln;
 use vulkano::format::ClearValue;
 use vulkano::pipeline::graphics::viewport::Viewport;
@@ -32,7 +33,7 @@ pub struct VulkanContext {
     pub(crate) descriptors: LibDescriptorSets,
     pub(crate) shaders: LibShaderRegistry,
     pub(crate) pipeline: AppPipeline,
-    pub(crate) gpu_commands: AppGpuCommands,
+    // pub(crate) gpu_commands: AppGpuCommands,
     pub(crate) clear_color: ClearValue,
     pub(crate) ortho_builder: ImguiOrthoUniform,
     pub(crate) basic3d_mvp: Basic3dMVPUniform,
@@ -68,16 +69,19 @@ impl VulkanContext {
         );
         let clear_color = ClearValue::Float([0.1, 0.1, 0.1, 1.]);
 
-        let mut ortho_builder = ImguiOrthoUniform::new();
-        let mut basic3d_mvp = Basic3dMVPUniform::new();
+        let ortho_builder = ImguiOrthoUniform::new();
+        let basic3d_mvp = Basic3dMVPUniform::new();
+        /*
         let gpu_commands = AppGpuCommands::new(
             &context, &viewport, &swapchain, &pipeline,
             ImguiGeometry::default(), &AppDrawData3D::default(),
             clear_color.clone(), &mut descriptors,
             &mut ortho_builder, &DEFAULT_CAMERA, &mut basic3d_mvp, 0.)?;
+        */
+        let command_allocator = GpuCommandAllocator::new(&context);
         ImguiFontBuilder::build(
             &context, &pipeline.imgui, &mut descriptors,
-            &gpu_commands.allocator, imgui.fonts())?;
+            &command_allocator, imgui.fonts())?;
 
         // Completed
         let time_ms = Instant::now().duration_since(start).as_micros() as f64 / 1000.;
@@ -100,7 +104,7 @@ impl VulkanContext {
             descriptors,
             shaders,
             pipeline,
-            gpu_commands,
+            // gpu_commands,
             clear_color,
             ortho_builder,
             basic3d_mvp
@@ -118,10 +122,6 @@ impl VulkanContext {
             self.viewport.extent = dims;
         }
         Ok(())
-    }
-
-    pub fn present(&mut self) -> Result<bool> {
-        self.swapchain.present(&self.context, &self.gpu_commands)
     }
 
     pub(crate) fn create_shader_modules(
@@ -143,18 +143,26 @@ impl VulkanContext {
         camera: &Camera,
         time_elapsed: f32,
     ) -> Result<()> {
+        let acquired = match self.swapchain.acquire_swapchain_image() {
+            Some(v) => v,
+            None => {
+                self.swapchain.recreate = true;
+                return Ok(());
+            }
+        };
         let imgui_geometry = ImguiGeometry::new(&self.context, draw_data)?;
         let framebuffer_size = Vec2::new(
             draw_data.framebuffer_scale[0] * draw_data.display_size[0],
             draw_data.framebuffer_scale[1] * draw_data.display_size[1],
         );
         self.viewport = ViewportBuilder::from_extent(framebuffer_size);
-        self.gpu_commands.buffers.clear();
-        self.gpu_commands = AppGpuCommands::new(
-            &self.context, &self.viewport, &self.swapchain, &self.pipeline,
-            imgui_geometry, draw3d, self.clear_color.clone(),
+        
+        let command_buffer = AppGpuCommands::create_command_buffer(
+            &self.context, &self.viewport, self.swapchain.framebuffers[acquired.image_index].clone(), 
+            &self.pipeline,imgui_geometry, draw3d, self.clear_color.clone(),
             &mut self.descriptors, &mut self.ortho_builder, camera,
             &mut self.basic3d_mvp, time_elapsed)?;
+        self.swapchain.present(&self.context, command_buffer, acquired);
         Ok(())
     }
 }

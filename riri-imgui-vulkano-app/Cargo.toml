@@ -12,12 +12,13 @@ edition.workspace = true
 humantime = "2.3.0"
 gilrs-imgui-support = { git = "https://github.com/rirurin/gilrs-imgui-support"}
 glam = "0.32"
+image = "0.25"
 imgui = { git = "https://github.com/rirurin/imgui-rs", features = ["docking", "tables-api"] }
 imgui-winit-support = { git = "https://github.com/rirurin/imgui-winit-support" }
 riri-imgui-vulkano = { path = "../riri-imgui-vulkano" }
 riri-inspector-components = { git = "https://github.com/rirurin/riri-imgui-components", features = ["imgui-riri"] }
 riri-mod-tools-proc = { git = "https://github.com/rirurin/riri-mod-tools" }
-riri-mod-tools-rt = { git = "https://github.com/rirurin/riri-mod-tools", features = ["detailed-logs"] }
+riri-mod-tools-rt = { git = "https://github.com/rirurin/riri-mod-tools", default-features = false, features = ["detailed-logs"] }
 vulkano = "0.35"
 winit = { git = "https://github.com/rirurin/winit" }
 
