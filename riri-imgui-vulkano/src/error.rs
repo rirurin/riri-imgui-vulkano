@@ -18,6 +18,7 @@ pub enum LibError {
     CouldNotFindShader(String),
     MissingDescriptorSet(TextureId),
     NoFileExtensionOnShader,
+    NoSuitableSwapchainImageFormat
 }
 
 impl Error for LibError {}

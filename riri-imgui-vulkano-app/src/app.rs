@@ -145,7 +145,7 @@ impl App {
 impl ApplicationHandler for App {
     fn can_create_surfaces(&mut self, event_loop: &dyn ActiveEventLoop) {
         #[cfg(target_os = "windows")]
-        let icon = Some(WinIcon::from_resource(0x65, None)?.into());
+        let icon = Some(WinIcon::from_resource(0x65, None).unwrap().into());
         #[cfg(not(target_os = "windows"))]
         let icon = {
             let icon_path = std::env::current_exe().unwrap().parent().unwrap().join("appicon.png");
@@ -229,11 +229,6 @@ impl ApplicationHandler for App {
                 }
                 renderer.render(
                     draw_data, &self.data3d, &self.camera, self.time_elapsed).unwrap();
-                /*
-                if renderer.present().unwrap() {
-                    renderer.refresh(window.clone()).unwrap();
-                }
-                */
                 renderer.refresh(window.clone()).unwrap();
             },
             WindowEvent::SurfaceResized(_) => {

@@ -5,11 +5,12 @@ use vulkano::format::Format;
 use std::fmt::{Debug, Formatter};
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
+use riri_mod_tools_rt::logln;
 use vulkano::command_buffer::{CommandBufferExecFuture, PrimaryAutoCommandBuffer};
 use vulkano::image::view::ImageView;
 use vulkano::image::{Image, ImageUsage};
 use vulkano::render_pass::{Framebuffer, FramebufferCreateInfo};
-use vulkano::swapchain::{PresentFuture, Swapchain, SwapchainAcquireFuture, SwapchainCreateInfo, SwapchainPresentInfo};
+use vulkano::swapchain::{ColorSpace, PresentFuture, Swapchain, SwapchainAcquireFuture, SwapchainCreateInfo, SwapchainPresentInfo};
 use vulkano::sync::future::{FenceSignalFuture, JoinFuture};
 use vulkano::sync::GpuFuture;
 use vulkano::{sync, Validated, VulkanError};
@@ -33,8 +34,6 @@ pub struct BaseSwapchain {
     pub swapchain: Arc<Swapchain>,
     pub images: Vec<Arc<Image>>,
     pub framebuffers: Vec<Arc<Framebuffer>>,
-    // pub fences: Vec<Option<Arc<FenceSignalFuture<FenceFuture>>>>,
-    // pub previous_fence: usize,
     pub previous_frame_end: Option<Box<dyn GpuFuture>>,
     pub recreate: bool
 }
@@ -58,13 +57,23 @@ impl BaseSwapchain {
         window: Arc<Box<dyn Window>>
     ) -> Result<(Arc<Swapchain>, Vec<Arc<Image>>)>
     where T: HasPhysicalDevice + HasSurface + HasLogicalDevice + HasStandardMemoryAllocator {
-        // TODO: Prefer selecting UNORM, SRGB requires shader gamma correction
-        // for (format, colorspace) in context.physical_device().surface_formats(context.surface().as_ref(), Default::default())? {
-        //     println!("format {:?}, colorspace {:?}", format, colorspace);
-        // }
-        // let image_format = context.physical_device().surface_formats(
-        //     context.surface().as_ref(), Default::default())?[0].0;
-        let image_format = Format::B8G8R8A8_UNORM;
+        let image_format = context
+            .physical_device()
+            .surface_formats(context.surface().as_ref(), Default::default())?
+            .iter().filter_map(|(f, s)| {
+            match *s {
+                ColorSpace::SrgbNonLinear => Some(*f),
+                _ => None
+            }
+            })
+            .min_by_key(|f| match *f {
+                Format::B8G8R8A8_UNORM => 0,
+                Format::R8G8B8A8_UNORM => 1,
+                Format::B8G8R8A8_SRGB => 2,
+                Format::R8G8B8A8_SRGB => 3,
+                _ => 4
+            }).ok_or(LibError::NoSuitableSwapchainImageFormat)?;
+        logln!(Debug, "Selected swapchain image format: {:?}", image_format);
         let capabilities = context.physical_device().surface_capabilities(
             context.surface().as_ref(), Default::default())?;
         let dimensions = window.surface_size();
