@@ -6,13 +6,15 @@ A Rust crate for building cross-platform real-time GUI applications using imgui-
 
 This was designed as a rewrite for an existing GUI stack I've used for some applications to use non-Windows specific APIs (specifically migrating from Win32 + Direct3D11 to winit + Vulkan) to allow for Linux native builds of these apps.
 
+To use shader compilation using shaderc, enable the `use_compiler` feature.
+
 ### riri-imgui-vulkano-app
 
 A complete example of an app built on top of `riri-imgui-vulkano`, featuring a rendering pass with two subpasses for 3D vertices and UI. The example includes controller support using [glirs-imgui-support](github.com/rirurin/gilrs-imgui-support) to move the camera around and custom fonts.
 
 ![A preview of the app, with the imgui demo window and a spinning cube.](assets/app_preview.gif)
 
-To try out the sample app, run `cargo run`. Note that this uses [shaderc](https://crates.io/crates/shaderc), so it'll require installing Ninja on Windows.
+To try out the sample app, run `cargo run` from source or download the compiled program from releases.
 
 ### riri-imgui-vulkano
 
