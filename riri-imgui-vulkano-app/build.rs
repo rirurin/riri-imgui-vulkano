@@ -1,8 +1,10 @@
 use std::path::{Path, PathBuf};
 use riri_mod_tools::{git_version, mod_package };
+#[cfg(feature = "use_compiler")]
 use shaderc::{ShaderKind, SourceLanguage};
 #[cfg(target_os = "windows")]
 use winresource::WindowsResource;
+#[cfg(feature = "use_compiler")]
 use riri_imgui_vulkano_shaders::AppCompiler;
 
 fn get_appicon<P>(base: P, icon_dim: u32) -> PathBuf
@@ -34,7 +36,9 @@ fn get_output_directory() -> PathBuf {
 fn main() {
     let base = std::env::current_dir().unwrap();
     let out_dir = get_output_directory();
-    // Compile shaders and copy to output directory
+    // Compile shaders and copy into the crate's /shaders folder so we can push the compiled
+    // bytecode to the repo. This avoids having to bundle shaderc which slows down compilation
+    // by a lot.
     let shader_names = [
         "shaders/basic3d.ps",
         "shaders/basic3d.vs",
@@ -43,20 +47,29 @@ fn main() {
         "shaders/phong.ps",
         "shaders/phong.vs",
     ];
+    #[cfg(feature = "use_compiler")]
     let shaders_in = shader_names.map(|v| {
         let (name, ext) = v.rsplit_once(".").unwrap();
         let src_ext = format!("{}.{}.glsl", name, ext);
         base.join(&src_ext)
     });
     let shaders_out = shader_names.map(|v| {
-        let (base, ext) = v.rsplit_once(".").unwrap();
-        let spirv_ext = format!("{}.{}.spv", base, ext);
+        let (name, ext) = v.rsplit_once(".").unwrap();
+        let spirv_ext = format!("{}.{}.spv", name, ext);
+        base.join(&spirv_ext)
+    });
+    let shaders_target = shader_names.map(|v| {
+        let (name, ext) = v.rsplit_once(".").unwrap();
+        let spirv_ext = format!("{}.{}.spv", name, ext);
         out_dir.join(&spirv_ext)
     });
+    std::fs::create_dir_all(out_dir.join("shaders")).unwrap();
+    #[cfg(feature = "use_compiler")]
     for shader in &shaders_in {
         println!("cargo::rerun-if-changed={}", shader.to_str().unwrap());
     }
 
+    #[cfg(feature = "use_compiler")]
     for (path_in, path_out) in shaders_in.iter().zip(shaders_out.iter()) {
         // from shader-compiler example in riri-imgui-vulkano-shaders
         let filename = path_in.file_name().unwrap().to_str().unwrap().to_string();
@@ -81,6 +94,10 @@ fn main() {
             .write_to_vec().unwrap();
         std::fs::create_dir_all(path_out.parent().unwrap()).unwrap();
         std::fs::write(path_out.as_path(), bytes).unwrap();
+    }
+    // Copy compiled shaders to output directory
+    for (path_in, path_out) in shaders_out.iter().zip(shaders_target.iter()) {
+        std::fs::copy(path_in, path_out).unwrap();
     }
     // Copy fonts to output directory
     let font_names = [

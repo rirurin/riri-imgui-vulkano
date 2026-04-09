@@ -4,11 +4,23 @@ use std::ops::{Deref, DerefMut};
 use std::path::Path;
 use std::sync::Arc;
 use riri_mod_tools_rt::logln;
+#[cfg(feature = "use_compiler")]
 use shaderc::ShaderKind;
 use vulkano::shader::{EntryPoint, ShaderModule, ShaderModuleCreateInfo};
+#[cfg(feature = "use_compiler")]
 use riri_imgui_vulkano_shaders::AppCompiler;
 use crate::error::{LibError, Result};
 use crate::resources::HasLogicalDevice;
+
+#[cfg(not(feature = "use_compiler"))]
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ShaderKind {
+    Vertex,
+    Fragment,
+    Compute,
+    Geometry,
+}
 
 pub trait ShaderRegistry {
     /// Try to get a shader from the registry with the given name.
@@ -93,6 +105,7 @@ impl LibShaderRegistry {
         &mut self,
         context: &T,
         path: P,
+        #[allow(unused_variables)]
         kind: ShaderKind,
         entry_point: &str,
     ) -> Result<()> {
@@ -106,9 +119,12 @@ impl LibShaderRegistry {
         let bytecode_exists = std::fs::exists(bytecode.as_path())?;
         let source_exists = std::fs::exists(source.as_path())?;
         if !bytecode_exists && source_exists {
+            #[cfg(feature = "use_compiler")]
             AppCompiler::from_path(source.as_path())?
                 .set_shader_kind(kind)?
                 .write_to_file(bytecode.as_path())?;
+            #[cfg(not(feature = "use_compiler"))]
+            panic!("Shader compilation is not available for this program.");
         }
         let shader = if source_exists || bytecode_exists {
             let filename = path.as_ref()
@@ -144,6 +160,7 @@ impl Debug for AppShader {
 }
 
 impl AppShader {
+    #[cfg(feature = "use_compiler")]
     pub fn from_source<T: HasLogicalDevice>(context: &T, compiler: AppCompiler<'_>) -> Result<Self> {
         let artifact = compiler.create_artifact()?;
         let mut out = Self {

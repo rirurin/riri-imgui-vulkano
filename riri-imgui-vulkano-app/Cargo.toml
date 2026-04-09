@@ -23,9 +23,13 @@ vulkano = "0.35"
 winit = { git = "https://github.com/rirurin/winit" }
 
 [build-dependencies]
-riri-imgui-vulkano-shaders = { path = "../riri-imgui-vulkano-shaders" }
+riri-imgui-vulkano-shaders = { path = "../riri-imgui-vulkano-shaders", optional = true }
 riri-mod-tools = { git = "https://github.com/rirurin/riri-mod-tools" }
-shaderc = "0.10.1"
+shaderc = { version = "0.10.1", optional = true }
 
 [target.'cfg(windows)'.build-dependencies]
 winresource = "0.1.30"
+
+[features]
+default = []
+use_compiler = ["dep:riri-imgui-vulkano-shaders", "dep:shaderc", "riri-imgui-vulkano/use_compiler"]

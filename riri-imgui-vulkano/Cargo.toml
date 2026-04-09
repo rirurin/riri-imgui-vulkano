@@ -11,14 +11,16 @@ edition.workspace = true
 [dependencies]
 glam = "0.32"
 imgui = { git = "https://github.com/rirurin/imgui-rs", features = ["docking", "tables-api"] }
-imgui-winit-support = { git = "https://github.com/rirurin/imgui-winit-support" }
-riri-imgui-vulkano-shaders = { path = "../riri-imgui-vulkano-shaders" }
+riri-imgui-vulkano-shaders = { path = "../riri-imgui-vulkano-shaders", optional = true }
 riri-mod-tools-proc = { git = "https://github.com/rirurin/riri-mod-tools" }
 riri-mod-tools-rt = { git = "https://github.com/rirurin/riri-mod-tools", default-features = false, features = ["detailed-logs"] }
-shaderc = "0.10.1"
+shaderc = { version = "0.10.1", optional = true }
 vulkano = "0.35"
 winit = { git = "https://github.com/rirurin/winit" }
 
 [build-dependencies]
-riri-imgui-vulkano-shaders = { path = "../riri-imgui-vulkano-shaders" }
 riri-mod-tools = { git = "https://github.com/rirurin/riri-mod-tools" }
+
+[features]
+default = []
+use_compiler = ["dep:riri-imgui-vulkano-shaders", "dep:shaderc"]
