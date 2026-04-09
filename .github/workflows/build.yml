@@ -40,6 +40,17 @@ jobs:
         fetch-depth: 0
         submodules: 'recursive'
 
+    - name: Download libudev (Linux)
+      if: matrix.platform.runner-name == 'ubuntu-latest'
+      run: |
+        has_libudev_header=$(ls /usr/include | grep -E ^libudev.h | wc -c)
+        if [[ "$has_libudev_header" -gt 0 ]]; then
+            echo "libudev-dev is already installed, skipping"
+        else
+            sudo apt-get update
+            sudo apt-get install libudev-dev -V -y
+        fi
+
     - name: Setup Rust
       uses: actions-rust-lang/setup-rust-toolchain@v1.15.2
       with:
@@ -51,7 +62,7 @@ jobs:
     - name: Build Project
       uses: actions-rs/cargo@v1
       with:
-        command: build 
+        command: build
         args: --bin riri-imgui-vulkano-app
 
     - name: Upload Output (Linux)
