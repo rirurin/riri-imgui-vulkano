@@ -63,7 +63,7 @@ jobs:
       uses: actions-rs/cargo@v1
       with:
         command: build
-        args: --bin riri-imgui-vulkano-app
+        args: --release --bin riri-imgui-vulkano-app
 
     - name: Upload Output (Linux)
       uses: actions/upload-artifact@v4
