@@ -10,7 +10,8 @@ on:
 
 env:
   IS_RELEASE: ${{ startsWith(github.ref, 'refs/tags/') }}
-  OUTPUT_PATH: "./target/release/riri-imgui-vulkano-app"
+  OUTPUT_BASE: "./target/release"
+  # OUTPUT_PATH: "./target/release/riri-imgui-vulkano-app"
   RELEASE_TAG: ${{ github.ref_name }}
   RELEASE_PATH: "./Release"
 
@@ -70,14 +71,20 @@ jobs:
       with:
         if: matrix.platform.runner-name == 'ubuntu-latest'
         name: ${{ matrix.platform.release-name }}
-        path: ${{ env.OUTPUT_PATH }}
+        path: |
+          ${{ env.OUTPUT_BASE }}/riri-imgui-vulkano-app
+          ${{ env.OUTPUT_BASE }}/data
+          ${{ env.OUTPUT_BASE }}/shaders
 
     - name: Upload Output (Windows)
       uses: actions/upload-artifact@v4
       with:
         if: matrix.platform.runner-name != 'ubuntu-latest'
         name: ${{ matrix.platform.release-name }}
-        path: ${{ env.OUTPUT_PATH }}.exe
+        path: |
+          ${{ env.OUTPUT_BASE }}/riri-imgui-vulkano-app.exe
+          ${{ env.OUTPUT_BASE }}/data
+          ${{ env.OUTPUT_BASE }}/shaders
 
   publish:
     needs: build
