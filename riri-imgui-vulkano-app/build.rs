@@ -134,7 +134,7 @@ fn main() {
     // Setup Linux app info
     #[cfg(target_os = "linux")]
     {
-        std::fs::copy(appicon, out_dir.join("appicon.png")).unwrap();
+        std::fs::copy(appicon, out_dir.join("data/appicon.png")).unwrap();
     }
     // Get version info
     git_version::create_version_file(&base, cargo_info.get_package_string_required("version").unwrap());

@@ -148,7 +148,7 @@ impl ApplicationHandler for App {
         let icon = Some(WinIcon::from_resource(0x65, None).unwrap().into());
         #[cfg(not(target_os = "windows"))]
         let icon = {
-            let icon_path = std::env::current_exe().unwrap().parent().unwrap().join("appicon.png");
+            let icon_path = std::env::current_exe().unwrap().parent().unwrap().join("data/appicon.png");
             let app_icon = image::ImageReader::with_format(BufReader::new(File::open(icon_path).unwrap()), ImageFormat::Png);
             let app_icon= app_icon.decode().unwrap();
             Some(RgbaIcon::new(app_icon.as_rgba8().unwrap().to_vec(), app_icon.width(), app_icon.height()).unwrap().into())
