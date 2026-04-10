@@ -68,8 +68,8 @@ jobs:
 
     - name: Upload Output (Linux)
       uses: actions/upload-artifact@v4
+      if: matrix.platform.runner-name == 'ubuntu-latest'
       with:
-        if: matrix.platform.runner-name == 'ubuntu-latest'
         name: ${{ matrix.platform.release-name }}
         path: |
           ${{ env.OUTPUT_BASE }}/riri-imgui-vulkano-app
@@ -78,8 +78,8 @@ jobs:
 
     - name: Upload Output (Windows)
       uses: actions/upload-artifact@v4
+      if: matrix.platform.runner-name != 'ubuntu-latest'
       with:
-        if: matrix.platform.runner-name != 'ubuntu-latest'
         name: ${{ matrix.platform.release-name }}
         path: |
           ${{ env.OUTPUT_BASE }}/riri-imgui-vulkano-app.exe
