@@ -102,6 +102,8 @@ jobs:
         with:
           name: ${{ 'Linux Release' }}
           path: ${{ env.RELEASE_PATH }}
+          # Note: Artifacts are decompressed by default
+          skip-decompress: true
 
       - name: Download Windows Release
         uses: actions/download-artifact@v5
@@ -109,6 +111,7 @@ jobs:
         with:
           name: ${{ 'Windows Release' }}
           path: ${{ env.RELEASE_PATH }}
+          skip-decompress: true
 
       - name: Upload to GitHub Releases (on Tag)
         uses: softprops/action-gh-release@v0.1.14
