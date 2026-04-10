@@ -97,7 +97,7 @@ jobs:
           submodules: 'recursive'
 
       - name: Download Linux Release
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         if: env.IS_RELEASE == 'true'
         with:
           name: ${{ 'Linux Release' }}
@@ -106,7 +106,7 @@ jobs:
           skip-decompress: true
 
       - name: Download Windows Release
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         if: env.IS_RELEASE == 'true'
         with:
           name: ${{ 'Windows Release' }}
