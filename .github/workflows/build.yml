@@ -10,7 +10,7 @@ on:
 
 env:
   IS_RELEASE: ${{ startsWith(github.ref, 'refs/tags/') }}
-  OUTPUT_PATH: "./target/release/riri-imgui-vulkano"
+  OUTPUT_PATH: "./target/release/riri-imgui-vulkano-app"
   RELEASE_TAG: ${{ github.ref_name }}
   RELEASE_PATH: "./Release"
 
